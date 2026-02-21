@@ -55,6 +55,11 @@ class MonetaPresenceSensor(
         self._attr_unique_id = f"{entry_id}_presence"
 
     @property
+    def icon(self) -> str:
+        """Return icon: person inside home when at home, walking away when absent."""
+        return "mdi:home-account" if self.is_on else "mdi:account-arrow-right"
+
+    @property
     def device_info(self) -> DeviceInfo:
         return DeviceInfo(
             identifiers={(DOMAIN, self._entry_id)},
