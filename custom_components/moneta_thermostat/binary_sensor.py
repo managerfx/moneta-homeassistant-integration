@@ -57,7 +57,7 @@ class MonetaPresenceSensor(
     @property
     def icon(self) -> str:
         """Return icon: person inside home when at home, walking away when absent."""
-        return "mdi:home-account" if self.is_on else "mdi:account-arrow-right"
+        return "mdi:home-import-outline" if self.is_on else "mdi:home-export-outline"
 
     @property
     def device_info(self) -> DeviceInfo:
