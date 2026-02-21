@@ -2,10 +2,10 @@
     "domain": "moneta_thermostat",
     "name": "Moneta Thermostat",
     "version": "1.0.0",
-    "documentation": "https://github.com/felicelombardi/moneta-homeassistant-integration",
-    "issue_tracker": "https://github.com/felicelombardi/moneta-homeassistant-integration/issues",
+    "documentation": "https://github.com/managerfx/moneta-homeassistant-integration",
+    "issue_tracker": "https://github.com/managerfx/moneta-homeassistant-integration/issues",
     "codeowners": [
-        "@felicelombardi"
+        "@managerfx"
     ],
     "requirements": [],
     "dependencies": [],
