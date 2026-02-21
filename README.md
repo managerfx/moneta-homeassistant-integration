@@ -1,74 +1,66 @@
-# Moneta Thermostat – Home Assistant Integration
+# Moneta Thermostat
 
-Custom component per Home Assistant che integra il termostato **Delta Controls** tramite l'API cloud di PlanetSmartCity.
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
+[![Version](https://img.shields.io/github/v/release/managerfx/moneta-homeassistant-integration)](https://github.com/managerfx/moneta-homeassistant-integration/releases)
 
-Replica la stessa business logic del plugin Homebridge [`moneta-homebridge-plugin`](https://github.com/managerfx/moneta-homebridge-plugin).
+Integrazione Home Assistant per il termostato **Delta Controls** via API cloud **PlanetSmartCity**.
 
 ---
 
 ## ⚠️ Come ottenere il Bearer Token
 
-> **Importante:** Prima di configurare l'integrazione devi recuperare il tuo Bearer Token.
+> Prima di configurare l'integrazione devi recuperare il tuo Bearer Token.
 
-1. **Accedi all'app mobile** PlanetSmartCity con le tue credenziali
-2. Vai su **[https://managerfx.github.io/PlanetHack/](https://managerfx.github.io/PlanetHack/)**
-3. Inserisci le tue credenziali (email e password) dell'app mobile
-4. Il sito ti mostrerà il Bearer Token da copiare
-
-Conserva questo token: lo inserirai nel campo **Bearer Token** durante la configurazione.
+1. Accedi all'**app mobile PlanetSmartCity** con le tue credenziali
+2. Vai su 👉 **[https://managerfx.github.io/PlanetHack/](https://managerfx.github.io/PlanetHack/)**
+3. Inserisci email e password dell'app mobile
+4. Copia il Bearer Token generato
 
 ---
 
-## Installazione
-
-### Metodo 1 – HACS (consigliato)
+## Installazione via HACS
 
 1. Apri **HACS** in Home Assistant
-2. Clicca sul menu **⋮ → Custom repositories**
-3. Incolla l'URL: `https://github.com/managerfx/moneta-homeassistant-integration`
-4. Categoria: **Integration** → **Add**
-5. Cerca **"Moneta Thermostat"** → **Download**
-6. **Riavvia Home Assistant**
+2. **⋮ → Custom repositories** → incolla `https://github.com/managerfx/moneta-homeassistant-integration` → Categoria: **Integration**
+3. Cerca **"Moneta Thermostat"** → **Download**
+4. Riavvia Home Assistant
 
-### Metodo 2 – Manuale
+### Installazione manuale
 
-1. Scarica o clona questo repository
-2. Copia la cartella `custom_components/moneta_thermostat/` nella directory `custom_components/` della tua installazione di Home Assistant
-3. **Riavvia Home Assistant**
+1. Copia la cartella `custom_components/moneta_thermostat/` nella directory `custom_components/` di Home Assistant
+2. Riavvia Home Assistant
 
 ---
 
 ## Configurazione
 
-Dopo il riavvio:
-
-1. Vai in **Impostazioni → Dispositivi e servizi → Aggiungi integrazione**
+1. **Impostazioni → Dispositivi e servizi → Aggiungi integrazione**
 2. Cerca **"Moneta Thermostat"**
-3. Compila il form:
+3. Inserisci:
 
 | Campo | Descrizione | Default |
 |---|---|---|
-| **Bearer Token** | Il token recuperato su PlanetHack | — |
-| **Polling Interval** | Frequenza di aggiornamento (minuti, min 5) | `10` |
-
-4. Clicca **Invia** — le entità verranno create automaticamente
+| **Bearer Token** | Token ottenuto da PlanetHack | — |
+| **Polling Interval** | Frequenza aggiornamento (min 5 minuti) | `10` |
 
 ---
 
-## Entità create
+## Entità
 
 | Entità | Tipo | Descrizione |
 |---|---|---|
-| `climate.thermostat_zone_1` | Climate | Termostato zona 1 |
-| `climate.thermostat_zone_N` | Climate | Una entità per ogni zona |
-| `binary_sensor.thermostat_presence` | Binary Sensor | Presenza in casa (atHome) |
-| `sensor.external_temperature` | Sensor | Temperatura esterna |
-
-Le entità supportano le modalità: **Auto**, **Heat**, **Cool**, **Off**.
+| `climate.thermostat_zone_N` | Clima | Una per ogni zona (auto / heat / cool / off) |
+| `binary_sensor.thermostat_presence` | Presenza | 🏠← in casa / 🏠→ fuori casa |
+| `sensor.external_temperature` | Temperatura | Temperatura esterna |
 
 ---
 
-## Note
+## Modalità supportate
 
-- Il token viene generato dall'app mobile PlanetSmartCity: ricordati di accedere all'app prima di usare PlanetHack, altrimenti la sessione potrebbe non essere aggiornata.
-- La cache dei dati viene invalidata automaticamente ad ogni modifica, garantendo dati sempre aggiornati.
+| Modalità | Comportamento |
+|---|---|
+| **Auto** | Schedula automatica. Usa `target_temp_high` (presente) e `target_temp_low` (assente) in inverno — invertiti in estate |
+| **Heat / Cool** | Manuale. Usa la temperatura *presente* come setpoint |
+| **Off** | Zona disattivata (`expiration=0`, setpoint = temp+1) |
+
+> Il cambio di modalità invalida la cache e aggiorna immediatamente i dati.
