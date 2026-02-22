@@ -1,7 +1,12 @@
 """Climate entity for the Moneta Thermostat integration.
 
-Mirrors the business logic in delta-thermostat.accessory.ts from the
-Homebridge plugin, adapted to the Home Assistant climate platform.
+Design choices (vs Homebridge plugin):
+- AUTO mode: target_temperature shows the effective_setpoint (read-only).
+  Present/absent setpoints are controlled via separate number entities
+  (see number.py), so no TARGET_TEMPERATURE_RANGE here.
+- HEAT/COOL mode: target_temperature is settable (manual temp).
+- OFF mode: zone is turned off.
+- Season-aware: zone 2 is absent in summer → entity becomes unavailable.
 """
 from __future__ import annotations
 
@@ -25,7 +30,6 @@ from .const import (
     CATEGORY_COOLING,
     CATEGORY_HEATING,
     CONF_ZONES_NAMES,
-    DEFAULT_ZONE_ID,
     DOMAIN,
     MANUFACTURER,
     MODEL,
@@ -45,10 +49,9 @@ from .models import Category, SeasonName, Zone, ZoneMode
 _LOGGER = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Mode mapping tables (mirrors ZONE_MODE_TO_TARGET_STATE_MAP in TS plugin)
+# Mode mapping tables
 # ---------------------------------------------------------------------------
-# Maps HA HVACMode → logic predicate(zone_mode, season) that returns True
-# Order matters: checked in HA HVACMode list order
+
 _HVAC_MODE_PREDICATES = {
     HVACMode.OFF: lambda mode, _season: mode == ZONE_MODE_OFF,
     HVACMode.AUTO: lambda mode, _season: mode in (
@@ -62,8 +65,6 @@ _HVAC_MODE_PREDICATES = {
     ),
 }
 
-# Maps Category (heating/cooling) → valid HVACModes
-# Mirrors VALID_TARGET_STATE_BY_CATEGORY_MAP in TS plugin
 _VALID_MODES_BY_CATEGORY = {
     CATEGORY_HEATING: [HVACMode.OFF, HVACMode.HEAT, HVACMode.AUTO],
     CATEGORY_COOLING: [HVACMode.OFF, HVACMode.COOL, HVACMode.AUTO],
@@ -100,11 +101,14 @@ async def async_setup_entry(
 class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], ClimateEntity):
     """Climate entity for a single thermostat zone.
 
-    Mirrors DeltaThermostatPlatformAccessory from delta-thermostat.accessory.ts.
+    Present/absent setpoints are managed via number.py entities.
+    This entity controls mode (off/auto/heat/cool) and manual temperature only.
     """
 
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_has_entity_name = True
+    # Only TARGET_TEMPERATURE — no TARGET_TEMPERATURE_RANGE
+    _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE
 
     def __init__(
         self,
@@ -145,6 +149,15 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         return next((z for z in data.zones if z.id == self._zone_id), None)
 
     @property
+    def available(self) -> bool:
+        """False when this zone is absent in the current season payload.
+
+        Zone 2 is only present in winter. In summer the entity is
+        marked unavailable so HA doesn't show stale data.
+        """
+        return self.coordinator.last_update_success and self._zone is not None
+
+    @property
     def _category(self) -> str:
         data = self.coordinator.data
         return data.category if data else "off"
@@ -155,7 +168,7 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         return data.season.id if data else SEASON_WINTER
 
     # ------------------------------------------------------------------
-    # HVAC Modes (dynamic based on category – same as Homebridge plugin)
+    # HVAC Modes (dynamic based on category)
     # ------------------------------------------------------------------
 
     @property
@@ -163,18 +176,7 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         return _VALID_MODES_BY_CATEGORY.get(self._category, [HVACMode.OFF])
 
     # ------------------------------------------------------------------
-    # Feature flags (dynamic: target_temp_range only in AUTO mode)
-    # ------------------------------------------------------------------
-
-    @property
-    def supported_features(self) -> ClimateEntityFeature:
-        base = ClimateEntityFeature.TARGET_TEMPERATURE
-        if self.hvac_mode == HVACMode.AUTO:
-            base |= ClimateEntityFeature.TARGET_TEMPERATURE_RANGE
-        return base
-
-    # ------------------------------------------------------------------
-    # Current HVAC mode (mirrors handleTargetHeatingCoolingStateGet)
+    # Current HVAC mode
     # ------------------------------------------------------------------
 
     @property
@@ -189,7 +191,7 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         return HVACMode.OFF
 
     # ------------------------------------------------------------------
-    # Current HVAC action (mirrors getCurrentHeatingCoolingState)
+    # Current HVAC action
     # ------------------------------------------------------------------
 
     @property
@@ -205,7 +207,7 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         return HVACAction.IDLE
 
     # ------------------------------------------------------------------
-    # Current temperature (mirrors handleCurrentTemperatureGet)
+    # Current temperature
     # ------------------------------------------------------------------
 
     @property
@@ -214,62 +216,22 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         return zone.temperature if zone else None
 
     # ------------------------------------------------------------------
-    # Target temperature – MANUAL mode (mirrors handleTargetTemperatureGet)
+    # Target temperature
+    #
+    # AUTO mode  → shows effective_setpoint (read-only display).
+    #              Present/absent temps are managed via number entities.
+    # MANUAL mode → shows and accepts the manual setpoint.
     # ------------------------------------------------------------------
 
     @property
     def target_temperature(self) -> float | None:
         zone = self._zone
-        if not zone or self.hvac_mode == HVACMode.AUTO:
+        if not zone:
             return None
         return zone.effective_setpoint
 
     # ------------------------------------------------------------------
-    # Target temperature HIGH – AUTO mode (mirrors CoolingThresholdTemperature)
-    #
-    # Heating season → highest desired temp = present setpoint (you want it
-    #   warmer when home, so this is the "upper bound")
-    # Cooling season → highest desired temp = absent setpoint
-    # ------------------------------------------------------------------
-
-    @property
-    def target_temperature_high(self) -> float | None:
-        zone = self._zone
-        if not zone or self.hvac_mode != HVACMode.AUTO:
-            return None
-        category = self._category
-        client = self.coordinator.client
-        if category == CATEGORY_HEATING:
-            temp = client.get_setpoint_temperature(zone, SETPOINT_PRESENT)
-            if temp is not None:
-                return max(temp, zone.effective_setpoint)
-            return zone.effective_setpoint
-        if category == CATEGORY_COOLING:
-            return client.get_setpoint_temperature(zone, SETPOINT_ABSENT)
-        return None
-
-    # ------------------------------------------------------------------
-    # Target temperature LOW – AUTO mode (mirrors HeatingThresholdTemperature)
-    #
-    # Heating season → lowest desired temp = absent setpoint (away temp)
-    # Cooling season → lowest desired temp = present setpoint
-    # ------------------------------------------------------------------
-
-    @property
-    def target_temperature_low(self) -> float | None:
-        zone = self._zone
-        if not zone or self.hvac_mode != HVACMode.AUTO:
-            return None
-        category = self._category
-        client = self.coordinator.client
-        if category == CATEGORY_HEATING:
-            return client.get_setpoint_temperature(zone, SETPOINT_ABSENT)
-        if category == CATEGORY_COOLING:
-            return client.get_setpoint_temperature(zone, SETPOINT_PRESENT)
-        return None
-
-    # ------------------------------------------------------------------
-    # Temperature limits (from limits / manual_limits)
+    # Temperature limits
     # ------------------------------------------------------------------
 
     @property
@@ -302,7 +264,7 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
     # ------------------------------------------------------------------
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
-        """Set HVAC mode. Mirrors handleTargetHeatingCoolingStateSet."""
+        """Set HVAC mode."""
         client = self.coordinator.client
         if hvac_mode == HVACMode.OFF:
             await client.set_off()
@@ -313,43 +275,59 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         await self.coordinator.async_request_refresh()
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
-        """Set temperature. Mirrors handleTargetTemperatureSet and threshold handlers."""
+        """Set manual temperature (only relevant in HEAT/COOL mode).
+
+        In AUTO mode, target_temperature is read-only (shows effective_setpoint).
+        To change present/absent setpoints use the number entities.
+        """
         zone = self._zone
         if not zone:
             return
+        if self.hvac_mode == HVACMode.AUTO:
+            # In AUTO, the climate entity doesn't write temperatures.
+            # Direction users to the number entities for this.
+            _LOGGER.warning(
+                "Zone %s is in AUTO mode. Use the number entities to set "
+                "present/absent temperatures instead.", self._zone_id
+            )
+            return
 
-        client = self.coordinator.client
-        hvac_mode = self.hvac_mode
-
-        if hvac_mode == HVACMode.AUTO:
-            # AUTO mode: set present/absent setpoints
-            high = kwargs.get("target_temp_high")
-            low = kwargs.get("target_temp_low")
-            category = self._category
-            if category == CATEGORY_HEATING:
-                # high → present (CoolingThreshold), low → absent (HeatingThreshold)
-                await client.set_present_absent_temperature(
-                    self._zone_id,
-                    present_temperature=high,
-                    absent_temperature=low,
-                )
-            else:
-                # COOLING: low → present, high → absent
-                await client.set_present_absent_temperature(
-                    self._zone_id,
-                    present_temperature=low,
-                    absent_temperature=high,
-                )
-        else:
-            # MANUAL mode: validate against limits then set
-            temperature = kwargs.get(ATTR_TEMPERATURE)
-            if temperature is None:
-                return
-            data = self.coordinator.data
-            if data:
-                limits = data.limits
-                in_range = limits.present_min_temp <= temperature <= limits.present_max_temp
-                temperature = temperature if in_range else limits.present_min_temp
-            await client.set_manual_temperature(self._zone_id, temperature)
-
+        temperature = kwargs.get(ATTR_TEMPERATURE)
+        if temperature is None:
+            return
+        data = self.coordinator.data
+        if data:
+            limits = data.limits
+            in_range = limits.present_min_temp <= temperature <= limits.present_max_temp
+            temperature = temperature if in_range else limits.present_min_temp
+        await self.coordinator.client.set_manual_temperature(self._zone_id, temperature)
         await self.coordinator.async_request_refresh()
+
+    # ------------------------------------------------------------------
+    # Extra state attributes
+    # ------------------------------------------------------------------
+
+    @property
+    def extra_state_attributes(self) -> dict | None:
+        """Expose read-only thermostat fields and full schedule as HA attributes."""
+        zone = self._zone
+        if not zone:
+            return None
+        attrs: dict = {
+            "at_home": zone.at_home,
+            "at_home_for_scheduler": zone.at_home_for_scheduler,
+            "setpoint_selected": zone.setpoint_selected,
+            "holiday_active": zone.holiday_active,
+            "effective_setpoint": zone.effective_setpoint,
+        }
+        # Expose the weekly schedule for visibility (and to allow copying
+        # the JSON into the set_zone_schedule service call)
+        if zone.calendar:
+            attrs["schedule"] = [
+                {
+                    "day": s.day,
+                    "bands": s.bands,
+                }
+                for s in zone.calendar.schedule
+            ]
+        return attrs

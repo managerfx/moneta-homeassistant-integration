@@ -63,6 +63,77 @@ class Setpoint:
 
 
 @dataclass
+class Band:
+    """A single time band in the weekly schedule.
+
+    Example: MON 16:00-21:30 → setpointType=present
+    """
+    id: int
+    setpoint_type: str
+    start_hour: int
+    start_min: int
+    end_hour: int
+    end_min: int
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Band":
+        start = data.get("start", {})
+        end = data.get("end", {})
+        return cls(
+            id=data.get("id", 0),
+            setpoint_type=data.get("setpointType", SetPointType.PRESENT),
+            start_hour=start.get("hour", 0),
+            start_min=start.get("min", 0),
+            end_hour=end.get("hour", 0),
+            end_min=end.get("min", 0),
+        )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "setpointType": self.setpoint_type,
+            "start": {"hour": self.start_hour, "min": self.start_min},
+            "end": {"hour": self.end_hour, "min": self.end_min},
+        }
+
+
+@dataclass
+class Schedule:
+    """One day of the weekly schedule."""
+    day: str
+    bands: list[Band]
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Schedule":
+        return cls(
+            day=data.get("day", ""),
+            bands=[Band.from_dict(b) for b in data.get("bands", [])],
+        )
+
+    def to_dict(self) -> dict:
+        return {"day": self.day, "bands": [b.to_dict() for b in self.bands]}
+
+
+@dataclass
+class Calendar:
+    """Full weekly schedule for a zone."""
+    step: int  # minutes per slot (usually 30)
+    schedule: list[Schedule]
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Calendar":
+        if not data:
+            return cls(step=30, schedule=[])
+        return cls(
+            step=data.get("step", 30),
+            schedule=[Schedule.from_dict(s) for s in data.get("schedule", [])],
+        )
+
+    def to_dict(self) -> dict:
+        return {"step": self.step, "schedule": [s.to_dict() for s in self.schedule]}
+
+
+@dataclass
 class Limits:
     steps: int = 0
     step_value: float = 0.5
@@ -123,6 +194,8 @@ class Zone:
     expiration: Any = None
     current_manual_temperature: float = 0.0
     date_expiration: Any = None
+    holiday_active: bool = False
+    calendar: Calendar | None = None
 
     @classmethod
     def from_dict(cls, data: dict) -> "Zone":
@@ -140,6 +213,8 @@ class Zone:
             expiration=data.get("expiration"),
             current_manual_temperature=data.get("currentManualTemperature", 0.0),
             date_expiration=data.get("dateExpiration"),
+            holiday_active=bool(data.get("holidayActive", False)),
+            calendar=Calendar.from_dict(data.get("calendar")) if data.get("calendar") else None,
         )
 
 

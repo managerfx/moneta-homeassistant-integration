@@ -172,48 +172,49 @@ class MonetaApiClient:
         """Set all zones to OFF mode.
 
         Mirrors setOffTargetState() in thermostat.api-provider.ts.
-        Sets mode=off, expiration=0, setpoint=effective at temp+1.
+        Sets mode=off, expiration=0, setpoint=effective at temp+1 for each zone.
+        Sends all zones (not just zone 1) because same_mode_for_all_zones=true.
         """
         if not self._cached_data:
             return False
-        zone = self.get_zone_by_id(DEFAULT_ZONE_ID)
-        effective_temp = (zone.temperature + 1) if zone else 19
+
+        zones_payload = []
+        for zone in self._cached_data.zones:
+            effective_temp = zone.temperature + 1
+            zones_payload.append({
+                "id": zone.id,
+                "mode": ZONE_MODE_OFF,
+                "expiration": 0,
+                "setpoints": [
+                    {"type": SETPOINT_EFFECTIVE, "temperature": effective_temp}
+                ],
+            })
 
         payload = {
             "request_type": REQUEST_TYPE_SETPOINT,
             "unitCode": self._cached_data.unit_code,
             "category": self._cached_data.category,
-            "zones": [
-                {
-                    "id": DEFAULT_ZONE_ID,
-                    "mode": ZONE_MODE_OFF,
-                    "expiration": 0,
-                    "setpoints": [
-                        {"type": SETPOINT_EFFECTIVE, "temperature": effective_temp}
-                    ],
-                }
-            ],
+            "zones": zones_payload,
         }
         return await self._set_request(payload)
 
     async def set_auto(self) -> bool:
-        """Set zone 1 to AUTO mode.
+        """Set all zones to AUTO mode.
 
         Mirrors setAutoTargetState() in thermostat.api-provider.ts.
+        Sends all zones because same_mode_for_all_zones=true.
         """
         if not self._cached_data:
             return False
+        zones_payload = [
+            {"id": zone.id, "mode": ZONE_MODE_AUTO, "expiration": 0}
+            for zone in self._cached_data.zones
+        ]
         payload = {
             "request_type": REQUEST_TYPE_SETPOINT,
             "unitCode": self._cached_data.unit_code,
             "category": self._cached_data.category,
-            "zones": [
-                {
-                    "id": DEFAULT_ZONE_ID,
-                    "mode": ZONE_MODE_AUTO,
-                    "expiration": 0,
-                }
-            ],
+            "zones": zones_payload,
         }
         return await self._set_request(payload)
 
@@ -309,3 +310,37 @@ class MonetaApiClient:
             "zones": [{"id": zone_id, "setpoints": setpoints}],
         }
         return await self._set_request(payload)
+
+    async def set_schedule_by_zone_id(
+        self,
+        zone_id: str,
+        schedule: list[dict],
+        step: int = 30,
+    ) -> bool:
+        """Update the weekly schedule calendar for a zone.
+
+        The schedule is a list of dicts with this structure:
+          {"day": "MON", "bands": [
+              {"id": 1, "setpointType": "present",
+               "start": {"hour": 16, "min": 0},
+               "end": {"hour": 21, "min": 30}}
+          ]}
+
+        Pass an empty 'bands' list for a day with no active bands (entire day absent).
+        """
+        if not self._cached_data:
+            return False
+        payload = {
+            "request_type": REQUEST_TYPE_SETPOINT,
+            "unitCode": self._cached_data.unit_code,
+            "category": self._cached_data.category,
+            "zones": [{
+                "id": zone_id,
+                "calendar": {
+                    "step": step,
+                    "schedule": schedule,
+                },
+            }],
+        }
+        return await self._set_request(payload)
+

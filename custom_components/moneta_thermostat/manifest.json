@@ -1,9 +1,9 @@
 {
     "domain": "moneta_thermostat",
     "name": "Moneta Thermostat",
-    "version": "1.6.0",
-    "documentation": "https://github.com/managerfx/moneta-homeassistant-integration",
-    "issue_tracker": "https://github.com/managerfx/moneta-homeassistant-integration/issues",
+    "version": "2.0.0",
+    "documentation": "https://github.com/managerfx/moneta-homeassistant-integration-evo",
+    "issue_tracker": "https://github.com/managerfx/moneta-homeassistant-integration-evo/issues",
     "codeowners": [
         "@managerfx"
     ],

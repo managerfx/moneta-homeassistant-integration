@@ -1,7 +1,11 @@
-"""Binary sensor entity for the Moneta Thermostat integration.
+"""Binary sensor entities for the Moneta Thermostat integration.
 
-Mirrors delta-presence.accessory.ts from the Homebridge plugin.
-Exposes zone 1 atHome as an occupancy sensor.
+Exposes:
+- Presence (atHome from zone 1) — occupancy sensor
+- Holiday mode (holidayActive from zone 1) — read-only, physical thermostat only
+
+Both are READ-ONLY: neither atHome nor holidayActive can be set via API.
+They reflect the state of physical buttons on the thermostat panel.
 """
 from __future__ import annotations
 
@@ -28,9 +32,12 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Moneta binary sensor from a config entry."""
+    """Set up Moneta binary sensor entities from a config entry."""
     coordinator: MonetaThermostatCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([MonetaPresenceSensor(coordinator, entry.entry_id)])
+    async_add_entities([
+        MonetaPresenceSensor(coordinator, entry.entry_id),
+        MonetaHolidaySensor(coordinator, entry.entry_id),
+    ])
 
 
 class MonetaPresenceSensor(
@@ -38,7 +45,10 @@ class MonetaPresenceSensor(
 ):
     """Occupancy sensor derived from zone 1 atHome.
 
-    Mirrors DeltaPresencePlatformAccessory from delta-presence.accessory.ts.
+    True  = someone is home (physical thermostat shows person inside).
+    False = away mode (physical thermostat shows person outside).
+
+    READ-ONLY: cannot be set via API.
     """
 
     _attr_device_class = BinarySensorDeviceClass.OCCUPANCY
@@ -56,7 +66,6 @@ class MonetaPresenceSensor(
 
     @property
     def icon(self) -> str:
-        """Return icon: person inside home when at home, walking away when absent."""
         return "mdi:home-import-outline" if self.is_on else "mdi:home-export-outline"
 
     @property
@@ -70,5 +79,56 @@ class MonetaPresenceSensor(
 
     @property
     def is_on(self) -> bool | None:
-        """Return True if someone is home (atHome is True for zone 1)."""
+        """Return True if zone 1 atHome is True."""
         return self.coordinator.client.get_presence()
+
+    @property
+    def extra_state_attributes(self) -> dict | None:
+        """Expose atHomeForScheduler as attribute for automations."""
+        zone = self.coordinator.client.get_zone_by_id(DEFAULT_ZONE_ID)
+        if not zone:
+            return None
+        return {"at_home_for_scheduler": zone.at_home_for_scheduler}
+
+
+class MonetaHolidaySensor(
+    CoordinatorEntity[MonetaThermostatCoordinator], BinarySensorEntity
+):
+    """Binary sensor for holiday mode (holidayActive field).
+
+    True  = holiday mode active (physical thermostat vacation button).
+    False = normal operation.
+
+    READ-ONLY: cannot be set via API.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Holiday Mode"
+
+    def __init__(
+        self,
+        coordinator: MonetaThermostatCoordinator,
+        entry_id: str,
+    ) -> None:
+        super().__init__(coordinator)
+        self._entry_id = entry_id
+        self._attr_unique_id = f"{entry_id}_holiday"
+
+    @property
+    def icon(self) -> str:
+        return "mdi:beach" if self.is_on else "mdi:home-clock"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._entry_id)},
+            name="Moneta Thermostat",
+            manufacturer=MANUFACTURER,
+            model=MODEL,
+        )
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return True if zone 1 holidayActive is True."""
+        zone = self.coordinator.client.get_zone_by_id(DEFAULT_ZONE_ID)
+        return zone.holiday_active if zone else False

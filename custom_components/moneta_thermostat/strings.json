@@ -17,5 +17,21 @@
         "abort": {
             "already_configured": "Integration is already configured."
         }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Moneta Thermostat — Update Settings",
+                "description": "Update your PlanetSmartCity Bearer token or polling interval",
+                "data": {
+                    "access_token": "Bearer Token",
+                    "polling_interval": "Polling Interval (minutes, min 5)"
+                }
+            }
+        },
+        "error": {
+            "cannot_connect": "Cannot connect to the Moneta API. Check your Bearer token.",
+            "unknown": "Unexpected error occurred."
+        }
     }
 }
