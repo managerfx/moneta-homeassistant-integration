@@ -128,6 +128,7 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
 
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_has_entity_name = True
+    _attr_translation_key = "thermostat_zone"
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE
         | ClimateEntityFeature.PRESET_MODE
