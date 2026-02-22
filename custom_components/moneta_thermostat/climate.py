@@ -1,12 +1,16 @@
 """Climate entity for the Moneta Thermostat integration.
 
-Design choices (vs Homebridge plugin):
-- AUTO mode: target_temperature shows the effective_setpoint (read-only).
-  Present/absent setpoints are controlled via separate number entities
-  (see number.py), so no TARGET_TEMPERATURE_RANGE here.
-- HEAT/COOL mode: target_temperature is settable (manual temp).
-- OFF mode: zone is turned off.
-- Season-aware: zone 2 is absent in summer → entity becomes unavailable.
+DESIGN:
+- HVAC modes: off / heat (winter) / cool (summer) / auto
+- In AUTO mode, preset_mode selects the operating profile:
+    - "Pianificazione"        → mode=auto  (follows weekly schedule)
+    - "Fuori casa"            → mode=auto + absent setpoint applied manually
+    - "Boost"                 → mode=party (high comfort temp)
+    - "Protezione antigelo"   → mode=off   (frost protection, lowest setpoint)
+- In HEAT/COOL mode: target_temperature is the manual setpoint (settable).
+- In AUTO mode: target_temperature shows effective_setpoint (read-only display).
+- Present/absent setpoints are managed via separate number entities (number.py).
+- Zone 2 becomes unavailable in summer (season change handling).
 """
 from __future__ import annotations
 
@@ -18,6 +22,12 @@ from homeassistant.components.climate import (
     ClimateEntityFeature,
     HVACAction,
     HVACMode,
+)
+from homeassistant.components.climate.const import (
+    PRESET_AWAY,
+    PRESET_BOOST,
+    PRESET_ECO,
+    PRESET_NONE,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
@@ -44,27 +54,32 @@ from .const import (
     ZONE_MODE_PARTY,
 )
 from .coordinator import MonetaThermostatCoordinator
-from .models import Category, SeasonName, Zone, ZoneMode
+from .models import Zone, ZoneMode
 
 _LOGGER = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Mode mapping tables
+# Preset constants
 # ---------------------------------------------------------------------------
+PRESET_SCHEDULE = "Pianificazione"   # mode=auto  — follows weekly schedule
+PRESET_FUORI_CASA = "Fuori casa"     # mode=auto  — away (reads from atHome state)
+PRESET_BOOST = "Boost"               # mode=party — full comfort temp
+PRESET_FROST = "Protezione antigelo" # mode=off   — frost/minimum temp
 
-_HVAC_MODE_PREDICATES = {
-    HVACMode.OFF: lambda mode, _season: mode == ZONE_MODE_OFF,
-    HVACMode.AUTO: lambda mode, _season: mode in (
-        ZONE_MODE_AUTO, ZONE_MODE_HOLIDAY, ZONE_MODE_PARTY
-    ),
-    HVACMode.HEAT: lambda mode, season: (
-        mode == ZONE_MODE_MANUAL and season == SEASON_WINTER
-    ),
-    HVACMode.COOL: lambda mode, season: (
-        mode == ZONE_MODE_MANUAL and season == SEASON_SUMMER
-    ),
+ALL_PRESETS = [PRESET_SCHEDULE, PRESET_FUORI_CASA, PRESET_BOOST, PRESET_FROST]
+
+# Maps zone.mode → preset label
+_MODE_TO_PRESET = {
+    ZONE_MODE_AUTO: PRESET_SCHEDULE,
+    ZONE_MODE_PARTY: PRESET_BOOST,
+    ZONE_MODE_HOLIDAY: PRESET_FUORI_CASA,
+    ZONE_MODE_OFF: PRESET_FROST,
+    ZONE_MODE_MANUAL: None,  # In manual there's no preset
 }
 
+# ---------------------------------------------------------------------------
+# HVAC mode predicates
+# ---------------------------------------------------------------------------
 _VALID_MODES_BY_CATEGORY = {
     CATEGORY_HEATING: [HVACMode.OFF, HVACMode.HEAT, HVACMode.AUTO],
     CATEGORY_COOLING: [HVACMode.OFF, HVACMode.COOL, HVACMode.AUTO],
@@ -85,12 +100,15 @@ async def async_setup_entry(
         return
 
     zones_names: list[str] = entry.data.get(CONF_ZONES_NAMES, [])
-
     entities = [
         MonetaClimateEntity(
             coordinator=coordinator,
             zone_id=zone.id,
-            display_name=(zones_names[idx] if idx < len(zones_names) else f"Thermostat Zone {zone.id}"),
+            display_name=(
+                zones_names[idx]
+                if idx < len(zones_names)
+                else f"Thermostat Zone {zone.id}"
+            ),
             entry_id=entry.entry_id,
         )
         for idx, zone in enumerate(data.zones)
@@ -101,14 +119,22 @@ async def async_setup_entry(
 class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], ClimateEntity):
     """Climate entity for a single thermostat zone.
 
+    Presets (available when hvac_mode = AUTO):
+        Pianificazione       → follows the weekly schedule calendar
+        Fuori casa           → away mode (atHome=false on physical device)
+        Boost                → party/boost mode (max comfort)
+        Protezione antigelo  → frost protection (zone in minimum-temp hold)
+
     Present/absent setpoints are managed via number.py entities.
-    This entity controls mode (off/auto/heat/cool) and manual temperature only.
     """
 
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_has_entity_name = True
-    # Only TARGET_TEMPERATURE — no TARGET_TEMPERATURE_RANGE
-    _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE
+    _attr_supported_features = (
+        ClimateEntityFeature.TARGET_TEMPERATURE
+        | ClimateEntityFeature.PRESET_MODE
+    )
+    _attr_preset_modes = ALL_PRESETS
 
     def __init__(
         self,
@@ -138,7 +164,7 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         )
 
     # ------------------------------------------------------------------
-    # Helper: current zone + state
+    # Internal helpers
     # ------------------------------------------------------------------
 
     @property
@@ -152,8 +178,8 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
     def available(self) -> bool:
         """False when this zone is absent in the current season payload.
 
-        Zone 2 is only present in winter. In summer the entity is
-        marked unavailable so HA doesn't show stale data.
+        Zone 2 is only present in winter; in summer the entity is
+        unavailable so HA doesn't show stale data.
         """
         return self.coordinator.last_update_success and self._zone is not None
 
@@ -168,31 +194,26 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         return data.season.id if data else SEASON_WINTER
 
     # ------------------------------------------------------------------
-    # HVAC Modes (dynamic based on category)
+    # HVAC modes
     # ------------------------------------------------------------------
 
     @property
     def hvac_modes(self) -> list[HVACMode]:
         return _VALID_MODES_BY_CATEGORY.get(self._category, [HVACMode.OFF])
 
-    # ------------------------------------------------------------------
-    # Current HVAC mode
-    # ------------------------------------------------------------------
-
     @property
     def hvac_mode(self) -> HVACMode | None:
         zone = self._zone
         if not zone:
             return None
-        season = self._season
-        for mode, predicate in _HVAC_MODE_PREDICATES.items():
-            if predicate(zone.mode, season):
-                return mode
-        return HVACMode.OFF
-
-    # ------------------------------------------------------------------
-    # Current HVAC action
-    # ------------------------------------------------------------------
+        # OFF or MANUAL → direct mapping
+        if zone.mode == ZONE_MODE_OFF:
+            return HVACMode.OFF
+        if zone.mode == ZONE_MODE_MANUAL:
+            season = self._season
+            return HVACMode.HEAT if season == SEASON_WINTER else HVACMode.COOL
+        # auto / party / holiday → AUTO (preset distinguishes them)
+        return HVACMode.AUTO
 
     @property
     def hvac_action(self) -> HVACAction | None:
@@ -207,7 +228,52 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         return HVACAction.IDLE
 
     # ------------------------------------------------------------------
-    # Current temperature
+    # Preset mode
+    # ------------------------------------------------------------------
+
+    @property
+    def preset_mode(self) -> str | None:
+        """Return current preset derived from zone.mode.
+
+        Mapping:
+            auto    → Pianificazione   (following schedule)
+            party   → Boost
+            holiday → Fuori casa       (holiday away mode — set by physical device)
+            off     → Protezione antigelo
+            manual  → None             (no preset in manual mode)
+        """
+        zone = self._zone
+        if not zone:
+            return None
+        # atHome=false + mode=auto → away (physical button was pressed)
+        if zone.mode == ZONE_MODE_AUTO and not zone.at_home:
+            return PRESET_FUORI_CASA
+        return _MODE_TO_PRESET.get(zone.mode)
+
+    async def async_set_preset_mode(self, preset_mode: str) -> None:
+        """Set preset mode.
+
+        Pianificazione  → set_auto()   (follow schedule)
+        Fuori casa      → set_auto()   (away — we can't force atHome via API,
+                                        but user should press physical button;
+                                        this resets any manual override to auto)
+        Boost           → set_party()
+        Protezione antigelo → set_frost()
+        """
+        client = self.coordinator.client
+        if preset_mode == PRESET_SCHEDULE:
+            await client.set_auto()
+        elif preset_mode == PRESET_FUORI_CASA:
+            # Best-effort: return to auto. Physical device controls atHome flag.
+            await client.set_auto()
+        elif preset_mode == PRESET_BOOST:
+            await client.set_party(self._zone_id)
+        elif preset_mode == PRESET_FROST:
+            await client.set_frost_protection()
+        await self.coordinator.async_request_refresh()
+
+    # ------------------------------------------------------------------
+    # Temperatures
     # ------------------------------------------------------------------
 
     @property
@@ -215,44 +281,27 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         zone = self._zone
         return zone.temperature if zone else None
 
-    # ------------------------------------------------------------------
-    # Target temperature
-    #
-    # AUTO mode  → shows effective_setpoint (read-only display).
-    #              Present/absent temps are managed via number entities.
-    # MANUAL mode → shows and accepts the manual setpoint.
-    # ------------------------------------------------------------------
-
     @property
     def target_temperature(self) -> float | None:
+        """In AUTO mode shows effective_setpoint (read-only).
+        In HEAT/COOL mode shows manual setpoint.
+        """
         zone = self._zone
-        if not zone:
-            return None
-        return zone.effective_setpoint
-
-    # ------------------------------------------------------------------
-    # Temperature limits
-    # ------------------------------------------------------------------
+        return zone.effective_setpoint if zone else None
 
     @property
     def min_temp(self) -> float:
         data = self.coordinator.data
         if not data:
             return 5.0
-        return min(
-            data.limits.absent_min_temp,
-            data.manual_limits.min_temp,
-        )
+        return min(data.limits.absent_min_temp, data.manual_limits.min_temp)
 
     @property
     def max_temp(self) -> float:
         data = self.coordinator.data
         if not data:
             return 30.0
-        return max(
-            data.limits.absent_max_temp,
-            data.manual_limits.max_temp,
-        )
+        return max(data.limits.absent_max_temp, data.manual_limits.max_temp)
 
     @property
     def target_temperature_step(self) -> float:
@@ -260,7 +309,7 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         return data.manual_limits.step_value if data else 0.5
 
     # ------------------------------------------------------------------
-    # SET handlers
+    # Setters
     # ------------------------------------------------------------------
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
@@ -275,23 +324,17 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         await self.coordinator.async_request_refresh()
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
-        """Set manual temperature (only relevant in HEAT/COOL mode).
-
-        In AUTO mode, target_temperature is read-only (shows effective_setpoint).
-        To change present/absent setpoints use the number entities.
-        """
+        """Set manual temperature (only in HEAT/COOL mode)."""
         zone = self._zone
         if not zone:
             return
         if self.hvac_mode == HVACMode.AUTO:
-            # In AUTO, the climate entity doesn't write temperatures.
-            # Direction users to the number entities for this.
             _LOGGER.warning(
-                "Zone %s is in AUTO mode. Use the number entities to set "
-                "present/absent temperatures instead.", self._zone_id
+                "Zone %s: set temperature ignored in AUTO mode. "
+                "Use Pianificazione schedule or switch to HEAT/COOL mode.",
+                self._zone_id,
             )
             return
-
         temperature = kwargs.get(ATTR_TEMPERATURE)
         if temperature is None:
             return
@@ -309,7 +352,6 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
 
     @property
     def extra_state_attributes(self) -> dict | None:
-        """Expose read-only thermostat fields and full schedule as HA attributes."""
         zone = self._zone
         if not zone:
             return None
@@ -320,14 +362,9 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
             "holiday_active": zone.holiday_active,
             "effective_setpoint": zone.effective_setpoint,
         }
-        # Expose the weekly schedule for visibility (and to allow copying
-        # the JSON into the set_zone_schedule service call)
         if zone.calendar:
             attrs["schedule"] = [
-                {
-                    "day": s.day,
-                    "bands": s.bands,
-                }
+                {"day": s.day, "bands": [b.to_dict() for b in s.bands]}
                 for s in zone.calendar.schedule
             ]
         return attrs

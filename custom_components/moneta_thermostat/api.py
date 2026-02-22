@@ -246,6 +246,61 @@ class MonetaApiClient:
         }
         return await self._set_request(payload)
 
+    async def set_party(self, zone_id: str | None = None) -> bool:
+        """Set PARTY (Boost) mode for all zones or a specific zone.
+
+        Corresponds to preset 'Boost' — thermostat raises to comfort temp
+        and holds there regardless of schedule.
+        """
+        if not self._cached_data:
+            return False
+        zones = (
+            [z for z in self._cached_data.zones if z.id == zone_id]
+            if zone_id
+            else self._cached_data.zones
+        )
+        zones_payload = []
+        for zone in zones:
+            present_temp = self.get_setpoint_temperature(zone, SETPOINT_PRESENT) or 21.0
+            zones_payload.append({
+                "id": zone.id,
+                "mode": ZONE_MODE_PARTY,
+                "currentManualTemperature": present_temp,
+                "setpoints": [{"type": SETPOINT_EFFECTIVE, "temperature": present_temp}],
+            })
+        payload = {
+            "request_type": REQUEST_TYPE_SETPOINT,
+            "unitCode": self._cached_data.unit_code,
+            "category": self._cached_data.category,
+            "zones": zones_payload,
+        }
+        return await self._set_request(payload)
+
+    async def set_frost_protection(self) -> bool:
+        """Set all zones to frost-protection hold (Protezione antigelo).
+
+        Uses mode=off with the minimum absent setpoint temperature to
+        prevent pipes freezing while keeping energy use minimal.
+        """
+        if not self._cached_data:
+            return False
+        zones_payload = []
+        for zone in self._cached_data.zones:
+            frost_temp = self.get_setpoint_temperature(zone, SETPOINT_ABSENT) or 7.0
+            zones_payload.append({
+                "id": zone.id,
+                "mode": ZONE_MODE_OFF,
+                "expiration": 0,
+                "setpoints": [{"type": SETPOINT_EFFECTIVE, "temperature": frost_temp}],
+            })
+        payload = {
+            "request_type": REQUEST_TYPE_SETPOINT,
+            "unitCode": self._cached_data.unit_code,
+            "category": self._cached_data.category,
+            "zones": zones_payload,
+        }
+        return await self._set_request(payload)
+
     async def set_manual_temperature(self, zone_id: str, temperature: float) -> bool:
         """Set the manual temperature for a zone.
 
