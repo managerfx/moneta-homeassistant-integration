@@ -26,8 +26,6 @@ from homeassistant.components.climate import (
 from homeassistant.components.climate.const import (
     PRESET_AWAY,
     PRESET_BOOST,
-    PRESET_ECO,
-    PRESET_NONE,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
@@ -59,22 +57,23 @@ from .models import Zone, ZoneMode
 _LOGGER = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Preset constants
+# Preset constants — use HA standard string values where possible
+# so the frontend shows correct icons (away=account-arrow-right, boost=thermometer-plus)
+# Label translations (Italian) are provided via strings.json / translations/en.json
 # ---------------------------------------------------------------------------
-PRESET_SCHEDULE = "Pianificazione"   # mode=auto  — follows weekly schedule
-PRESET_FUORI_CASA = "Fuori casa"     # mode=auto  — away (reads from atHome state)
-PRESET_BOOST = "Boost"               # mode=party — full comfort temp
-PRESET_FROST = "Protezione antigelo" # mode=off   — frost/minimum temp
+PRESET_SCHEDULE = "schedule"  # mode=auto  — follows weekly schedule (custom, no std icon)
+# PRESET_AWAY = "away"        # imported from homeassistant.components.climate.const
+# PRESET_BOOST = "boost"      # imported from homeassistant.components.climate.const
 
-ALL_PRESETS = [PRESET_SCHEDULE, PRESET_FUORI_CASA, PRESET_BOOST, PRESET_FROST]
+ALL_PRESETS = [PRESET_SCHEDULE, PRESET_AWAY, PRESET_BOOST]
 
-# Maps zone.mode → preset label
-_MODE_TO_PRESET = {
+# Maps zone.mode → preset value
+_MODE_TO_PRESET: dict[str, str | None] = {
     ZONE_MODE_AUTO: PRESET_SCHEDULE,
     ZONE_MODE_PARTY: PRESET_BOOST,
-    ZONE_MODE_HOLIDAY: PRESET_FUORI_CASA,
-    ZONE_MODE_OFF: PRESET_FROST,
-    ZONE_MODE_MANUAL: None,  # In manual there's no preset
+    ZONE_MODE_HOLIDAY: PRESET_AWAY,
+    ZONE_MODE_OFF: None,
+    ZONE_MODE_MANUAL: None,
 }
 
 # ---------------------------------------------------------------------------
@@ -119,11 +118,10 @@ async def async_setup_entry(
 class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], ClimateEntity):
     """Climate entity for a single thermostat zone.
 
-    Presets (available when hvac_mode = AUTO):
-        Pianificazione       → follows the weekly schedule calendar
-        Fuori casa           → away mode (atHome=false on physical device)
-        Boost                → party/boost mode (max comfort)
-        Protezione antigelo  → frost protection (zone in minimum-temp hold)
+    Presets (in AUTO hvac_mode):
+        schedule  [🕐] → follows the weekly schedule calendar (mode=auto)
+        away      [🚶] → away mode (atHome=false on physical device; mode=auto)
+        boost     [🔥] → party/boost mode (mode=party)
 
     Present/absent setpoints are managed via number.py entities.
     """
@@ -235,41 +233,34 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
     def preset_mode(self) -> str | None:
         """Return current preset derived from zone.mode.
 
-        Mapping:
-            auto    → Pianificazione   (following schedule)
-            party   → Boost
-            holiday → Fuori casa       (holiday away mode — set by physical device)
-            off     → Protezione antigelo
-            manual  → None             (no preset in manual mode)
+        zone.mode     → preset value
+        auto          → 'schedule'
+        party         → 'boost'
+        holiday       → 'away'
+        off / manual  → None
         """
         zone = self._zone
         if not zone:
             return None
-        # atHome=false + mode=auto → away (physical button was pressed)
+        # atHome=false + mode=auto → away
         if zone.mode == ZONE_MODE_AUTO and not zone.at_home:
-            return PRESET_FUORI_CASA
+            return PRESET_AWAY
         return _MODE_TO_PRESET.get(zone.mode)
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set preset mode.
 
-        Pianificazione  → set_auto()   (follow schedule)
-        Fuori casa      → set_auto()   (away — we can't force atHome via API,
-                                        but user should press physical button;
-                                        this resets any manual override to auto)
-        Boost           → set_party()
-        Protezione antigelo → set_frost()
+        schedule → set_auto()   (follow schedule)
+        away     → set_auto()   (physical atHome button controls actual state)
+        boost    → set_party()
         """
         client = self.coordinator.client
         if preset_mode == PRESET_SCHEDULE:
             await client.set_auto()
-        elif preset_mode == PRESET_FUORI_CASA:
-            # Best-effort: return to auto. Physical device controls atHome flag.
+        elif preset_mode == PRESET_AWAY:
             await client.set_auto()
         elif preset_mode == PRESET_BOOST:
             await client.set_party(self._zone_id)
-        elif preset_mode == PRESET_FROST:
-            await client.set_frost_protection()
         await self.coordinator.async_request_refresh()
 
     # ------------------------------------------------------------------

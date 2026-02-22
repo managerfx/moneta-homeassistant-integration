@@ -2,7 +2,7 @@
     "config": {
         "step": {
             "user": {
-                "title": "Moneta Thermostat",
+                "title": "Moneta Thermostat EVO",
                 "description": "Enter your PlanetSmartCity account Bearer token",
                 "data": {
                     "access_token": "Bearer Token",
@@ -21,7 +21,7 @@
     "options": {
         "step": {
             "init": {
-                "title": "Moneta Thermostat — Update Settings",
+                "title": "Moneta Thermostat EVO — Update Settings",
                 "description": "Update your PlanetSmartCity Bearer token or polling interval",
                 "data": {
                     "access_token": "Bearer Token",
@@ -32,6 +32,21 @@
         "error": {
             "cannot_connect": "Cannot connect to the Moneta API. Check your Bearer token.",
             "unknown": "Unexpected error occurred."
+        }
+    },
+    "entity": {
+        "climate": {
+            "thermostat_zone": {
+                "state_attributes": {
+                    "preset_mode": {
+                        "state": {
+                            "schedule": "Pianificazione",
+                            "away": "Fuori casa",
+                            "boost": "Boost"
+                        }
+                    }
+                }
+            }
         }
     }
 }

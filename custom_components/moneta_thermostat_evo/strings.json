@@ -2,36 +2,51 @@
     "config": {
         "step": {
             "user": {
-                "title": "Moneta Thermostat",
-                "description": "Enter your PlanetSmartCity account Bearer token",
+                "title": "Moneta Thermostat EVO",
+                "description": "Inserisci il Bearer token dell'account PlanetSmartCity",
                 "data": {
                     "access_token": "Bearer Token",
-                    "polling_interval": "Polling Interval (minutes, min 5)"
+                    "polling_interval": "Intervallo polling (minuti, min 5)"
                 }
             }
         },
         "error": {
-            "cannot_connect": "Cannot connect to the Moneta API. Check your Bearer token.",
-            "unknown": "Unexpected error occurred."
+            "cannot_connect": "Impossibile connettersi all'API Moneta. Verifica il token Bearer.",
+            "unknown": "Errore imprevisto."
         },
         "abort": {
-            "already_configured": "Integration is already configured."
+            "already_configured": "Integrazione già configurata."
         }
     },
     "options": {
         "step": {
             "init": {
-                "title": "Moneta Thermostat — Update Settings",
-                "description": "Update your PlanetSmartCity Bearer token or polling interval",
+                "title": "Moneta Thermostat EVO — Aggiorna impostazioni",
+                "description": "Aggiorna il Bearer token o l'intervallo di polling",
                 "data": {
                     "access_token": "Bearer Token",
-                    "polling_interval": "Polling Interval (minutes, min 5)"
+                    "polling_interval": "Intervallo polling (minuti, min 5)"
                 }
             }
         },
         "error": {
-            "cannot_connect": "Cannot connect to the Moneta API. Check your Bearer token.",
-            "unknown": "Unexpected error occurred."
+            "cannot_connect": "Impossibile connettersi all'API Moneta. Verifica il token Bearer.",
+            "unknown": "Errore imprevisto."
+        }
+    },
+    "entity": {
+        "climate": {
+            "thermostat_zone": {
+                "state_attributes": {
+                    "preset_mode": {
+                        "state": {
+                            "schedule": "Pianificazione",
+                            "away": "Fuori casa",
+                            "boost": "Boost"
+                        }
+                    }
+                }
+            }
         }
     }
 }
