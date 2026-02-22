@@ -1,7 +1,7 @@
 """Constants for the Moneta Thermostat integration."""
 from __future__ import annotations
 
-DOMAIN = "moneta_thermostat"
+DOMAIN = "moneta_thermostat_evo"
 MANUFACTURER = "Delta Controls"
 MODEL = "eZNT-T100"
 
