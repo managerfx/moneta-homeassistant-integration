@@ -255,7 +255,7 @@ class MonetaApiClient:
         }
         return await self._set_request(payload)
 
-    async def set_party(self, zone_id: str | None = None, hours: int = 2) -> bool:
+    async def set_party(self, zone_id: str | None = None, hours: int = 4) -> bool:
         """Set PARTY (Boost) mode for all zones or a specific zone.
 
         Corresponds to preset 'Boost' — thermostat raises to comfort temp
@@ -263,27 +263,44 @@ class MonetaApiClient:
         
         Args:
             zone_id: Optional zone ID. If None, applies to all zones.
-            hours: Duration in hours (1-9). Default 2 hours.
+            hours: Duration in hours. Fixed to 4 hours due to backend limitations.
         
-        The API requires expiration as Unix timestamp. The backend calculates
-        minutes_remaining = (timestamp - now) / 60, and accepts 60-540 minutes.
+        Note: The Delta Control backend has known issues with Party mode duration.
+        Only 4 hours (240 minutes) works reliably. Other durations are ignored
+        by the thermostat which always shows 4h on the display.
         """
         if not self._cached_data:
             _LOGGER.error("set_party: No cached data available")
             return False
         
-        # Clamp hours to valid range (1-9 hours = 60-540 minutes)
-        hours = max(1, min(hours, 9))
-        # Calculate expiration as Unix timestamp, rounded to nearest minute (step=60)
+        # Fixed to 4 hours - the only duration that works reliably
+        # Backend bug: other durations are accepted but thermostat shows 4h
+        hours = 4
+        
         now_ts = int(time.time())
         # Round to next full minute
-        now_ts_rounded = ((now_ts // 60) + 1) * 60
-        expiration_ts = now_ts_rounded + (hours * 3600)
+        now_rounded = ((now_ts // 60) + 1) * 60
+        
+        # Calculate the next valid base timestamp where % 7200 == 2220
+        # This pattern is required by the API validation
+        remainder = now_rounded % 7200
+        if remainder <= 2220:
+            next_valid_base = now_rounded - remainder + 2220
+        else:
+            next_valid_base = now_rounded - remainder + 7200 + 2220
+        
+        # For 4 hours, use base + 7200
+        expiration_ts = next_valid_base + 7200
+        
+        # Ensure expiration is in the future (60-540 min from now)
         minutes_from_now = (expiration_ts - now_ts) // 60
+        if minutes_from_now < 60:
+            expiration_ts += 7200
+            minutes_from_now = (expiration_ts - now_ts) // 60
         
         _LOGGER.info(
-            "set_party: hours=%d, now_ts=%d, expiration_ts=%d (divisible by 60: %s), minutes_from_now=%d",
-            hours, now_ts, expiration_ts, expiration_ts % 60 == 0, minutes_from_now
+            "set_party: 4h fixed, now=%d, expiration=%d (%%7200=%d), minutes_from_now=%d",
+            now_ts, expiration_ts, expiration_ts % 7200, minutes_from_now
         )
         
         zones = (
