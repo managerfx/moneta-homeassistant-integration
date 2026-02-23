@@ -1,0 +1,60 @@
+set_zone_schedule:
+  name: Imposta pianificazione zona
+  description: >
+    Aggiorna la pianificazione settimanale (calendario fasce orarie) per una zona
+    del termostato Moneta. La pianificazione deve contenere tutti e 7 i giorni
+    della settimana.
+  fields:
+    zone_id:
+      name: ID Zona
+      description: Identificativo della zona (es. "1", "2", "3").
+      required: true
+      example: "1"
+      selector:
+        text:
+
+    step:
+      name: Step (minuti)
+      description: >
+        Granularità della pianificazione in minuti. Valori supportati: 15, 30.
+        Default 30.
+      required: false
+      default: 30
+      example: 30
+      selector:
+        select:
+          options:
+            - "15"
+            - "30"
+
+    schedule:
+      name: Pianificazione settimanale
+      description: >
+        Lista di 7 oggetti giorno. Ogni giorno ha una lista di fasce orarie (bands).
+        I giorni senza fasce attive devono avere bands=[].
+      required: true
+      example: |
+        - day: MON
+          bands:
+            - id: 1
+              setpointType: present
+              start:
+                hour: 7
+                min: 0
+              end:
+                hour: 22
+                min: 30
+        - day: TUE
+          bands: []
+        - day: WED
+          bands: []
+        - day: THU
+          bands: []
+        - day: FRI
+          bands: []
+        - day: SAT
+          bands: []
+        - day: SUN
+          bands: []
+      selector:
+        object:
