@@ -274,14 +274,16 @@ class MonetaApiClient:
         
         # Clamp hours to valid range (1-9 hours = 60-540 minutes)
         hours = max(1, min(hours, 9))
-        # Calculate expiration as Unix timestamp
+        # Calculate expiration as Unix timestamp, rounded to nearest minute (step=60)
         now_ts = int(time.time())
-        expiration_ts = now_ts + (hours * 3600)
+        # Round to next full minute
+        now_ts_rounded = ((now_ts // 60) + 1) * 60
+        expiration_ts = now_ts_rounded + (hours * 3600)
         minutes_from_now = (expiration_ts - now_ts) // 60
         
         _LOGGER.info(
-            "set_party: hours=%d, now_ts=%d, expiration_ts=%d, minutes_from_now=%d",
-            hours, now_ts, expiration_ts, minutes_from_now
+            "set_party: hours=%d, now_ts=%d, expiration_ts=%d (divisible by 60: %s), minutes_from_now=%d",
+            hours, now_ts, expiration_ts, expiration_ts % 60 == 0, minutes_from_now
         )
         
         zones = (
