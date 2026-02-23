@@ -2,10 +2,10 @@
 
 Exposes:
 - Presence (atHome from zone 1) — occupancy sensor
-- Holiday mode (holidayActive from zone 1) — read-only, physical thermostat only
+- Holiday mode (holidayActive from zone 1) — vacation mode active
+- Party mode (mode=party from zone 1) — party/boost mode active
 
-Both are READ-ONLY: neither atHome nor holidayActive can be set via API.
-They reflect the state of physical buttons on the thermostat panel.
+These sensors reflect the current state from the thermostat.
 """
 from __future__ import annotations
 
@@ -23,6 +23,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DEFAULT_ZONE_ID, DOMAIN, MANUFACTURER, MODEL
 from .coordinator import MonetaThermostatCoordinator
+from .models import ZoneMode
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ async def async_setup_entry(
     async_add_entities([
         MonetaPresenceSensor(coordinator, entry.entry_id),
         MonetaHolidaySensor(coordinator, entry.entry_id),
+        MonetaPartySensor(coordinator, entry.entry_id),
     ])
 
 
@@ -132,3 +134,55 @@ class MonetaHolidaySensor(
         """Return True if zone 1 holidayActive is True."""
         zone = self.coordinator.client.get_zone_by_id(DEFAULT_ZONE_ID)
         return zone.holiday_active if zone else False
+
+
+class MonetaPartySensor(
+    CoordinatorEntity[MonetaThermostatCoordinator], BinarySensorEntity
+):
+    """Binary sensor for party mode (mode=party).
+
+    True  = party mode active (comfort temperature override).
+    False = normal operation.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Party Mode"
+
+    def __init__(
+        self,
+        coordinator: MonetaThermostatCoordinator,
+        entry_id: str,
+    ) -> None:
+        super().__init__(coordinator)
+        self._entry_id = entry_id
+        self._attr_unique_id = f"{entry_id}_party"
+
+    @property
+    def icon(self) -> str:
+        return "mdi:party-popper" if self.is_on else "mdi:calendar-clock"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._entry_id)},
+            name="Moneta Thermostat",
+            manufacturer=MANUFACTURER,
+            model=MODEL,
+        )
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return True if zone 1 mode is party."""
+        zone = self.coordinator.client.get_zone_by_id(DEFAULT_ZONE_ID)
+        return zone.mode == ZoneMode.PARTY if zone else False
+
+    @property
+    def extra_state_attributes(self) -> dict | None:
+        """Expose expiration info for party mode."""
+        zone = self.coordinator.client.get_zone_by_id(DEFAULT_ZONE_ID)
+        if not zone or zone.mode != ZoneMode.PARTY:
+            return None
+        return {
+            "expiration_minutes": zone.expiration,
+            "date_expiration": zone.date_expiration,
+        }

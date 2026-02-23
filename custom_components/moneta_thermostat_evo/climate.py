@@ -23,9 +23,6 @@ from homeassistant.components.climate import (
     HVACAction,
     HVACMode,
 )
-from homeassistant.components.climate.const import (
-    PRESET_BOOST,
-)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
@@ -51,21 +48,19 @@ from .models import Zone, ZoneMode
 _LOGGER = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Preset constants — use HA standard string values where possible
-# so the frontend shows correct icons (away=account-arrow-right, boost=thermometer-plus)
-# Label translations (Italian) are provided via strings.json / translations/en.json
+# Preset constants — custom string values with MDI icons
+# Label translations are provided via strings.json / translations/*.json
 # ---------------------------------------------------------------------------
-PRESET_SCHEDULE = "schedule"  # mode=auto  — follows weekly schedule (custom, no std icon)
+PRESET_SCHEDULE = "schedule"  # mode=auto  — follows weekly schedule
+PRESET_PARTY = "party"        # mode=party — party mode (1-9 hours comfort)
 PRESET_HOLIDAY = "holiday"    # mode=holiday — vacation mode (30 days antifreeze)
-# PRESET_AWAY = "away"        # imported from homeassistant.components.climate.const
-# PRESET_BOOST = "boost"      # imported from homeassistant.components.climate.const
 
-ALL_PRESETS = [PRESET_SCHEDULE, PRESET_BOOST, PRESET_HOLIDAY]
+ALL_PRESETS = [PRESET_SCHEDULE, PRESET_PARTY, PRESET_HOLIDAY]
 
 # Maps zone.mode → preset value
 _MODE_TO_PRESET: dict[str, str | None] = {
     ZoneMode.AUTO: PRESET_SCHEDULE,
-    ZoneMode.PARTY: PRESET_BOOST,
+    ZoneMode.PARTY: PRESET_PARTY,
     ZoneMode.HOLIDAY: PRESET_HOLIDAY,
     ZoneMode.OFF: None,
     ZoneMode.MANUAL: None,
@@ -248,16 +243,19 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         """Set preset mode.
 
         schedule → set_auto()   (follow schedule)
-        boost    → set_party()  (party mode for 2 hours)
+        party    → set_party()  (party mode for 2 hours)
         holiday  → set_holiday() (vacation mode for 30 days)
         """
+        _LOGGER.info("Setting preset mode to: %s for zone %s", preset_mode, self._zone_id)
         client = self.coordinator.client
+        success = False
         if preset_mode == PRESET_SCHEDULE:
-            await client.set_auto()
-        elif preset_mode == PRESET_BOOST:
-            await client.set_party(self._zone_id)
+            success = await client.set_auto()
+        elif preset_mode == PRESET_PARTY:
+            success = await client.set_party(self._zone_id)
         elif preset_mode == PRESET_HOLIDAY:
-            await client.set_holiday()
+            success = await client.set_holiday()
+        _LOGGER.info("Preset mode %s result: %s", preset_mode, success)
         await self.coordinator.async_request_refresh()
 
     # ------------------------------------------------------------------

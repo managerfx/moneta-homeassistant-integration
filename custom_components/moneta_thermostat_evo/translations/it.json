@@ -40,9 +40,9 @@
                 "state_attributes": {
                     "preset_mode": {
                         "state": {
-                            "schedule": "🗓️ Pianificazione",
-                            "boost": "🔥 Boost",
-                            "holiday": "🏖️ Vacanza (30 giorni)"
+                            "schedule": "Pianificazione",
+                            "party": "Party (2 ore)",
+                            "holiday": "Vacanza (30 giorni)"
                         }
                     }
                 }
