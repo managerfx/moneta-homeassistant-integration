@@ -45,11 +45,6 @@ from .const import (
     SEASON_WINTER,
     SETPOINT_ABSENT,
     SETPOINT_PRESENT,
-    ZONE_MODE_AUTO,
-    ZONE_MODE_HOLIDAY,
-    ZONE_MODE_MANUAL,
-    ZONE_MODE_OFF,
-    ZONE_MODE_PARTY,
 )
 from .coordinator import MonetaThermostatCoordinator
 from .models import Zone, ZoneMode
@@ -69,11 +64,11 @@ ALL_PRESETS = [PRESET_SCHEDULE, PRESET_AWAY, PRESET_BOOST]
 
 # Maps zone.mode → preset value
 _MODE_TO_PRESET: dict[str, str | None] = {
-    ZONE_MODE_AUTO: PRESET_SCHEDULE,
-    ZONE_MODE_PARTY: PRESET_BOOST,
-    ZONE_MODE_HOLIDAY: PRESET_AWAY,
-    ZONE_MODE_OFF: None,
-    ZONE_MODE_MANUAL: None,
+    ZoneMode.AUTO: PRESET_SCHEDULE,
+    ZoneMode.PARTY: PRESET_BOOST,
+    ZoneMode.HOLIDAY: PRESET_AWAY,
+    ZoneMode.OFF: None,
+    ZoneMode.MANUAL: None,
 }
 
 # ---------------------------------------------------------------------------
@@ -206,9 +201,9 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         if not zone:
             return None
         # OFF or MANUAL → direct mapping
-        if zone.mode == ZONE_MODE_OFF:
+        if zone.mode == ZoneMode.OFF:
             return HVACMode.OFF
-        if zone.mode == ZONE_MODE_MANUAL:
+        if zone.mode == ZoneMode.MANUAL:
             season = self._season
             return HVACMode.HEAT if season == SEASON_WINTER else HVACMode.COOL
         # auto / party / holiday → AUTO (preset distinguishes them)
@@ -220,9 +215,9 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         if not zone:
             return None
         category = self._category
-        if zone.mode != ZONE_MODE_OFF and category == CATEGORY_HEATING and zone.at_home:
+        if zone.mode != ZoneMode.OFF and category == CATEGORY_HEATING and zone.at_home:
             return HVACAction.HEATING
-        if zone.mode != ZONE_MODE_OFF and category == CATEGORY_COOLING and zone.at_home:
+        if zone.mode != ZoneMode.OFF and category == CATEGORY_COOLING and zone.at_home:
             return HVACAction.COOLING
         return HVACAction.IDLE
 
@@ -244,7 +239,7 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         if not zone:
             return None
         # atHome=false + mode=auto → away
-        if zone.mode == ZONE_MODE_AUTO and not zone.at_home:
+        if zone.mode == ZoneMode.AUTO and not zone.at_home:
             return PRESET_AWAY
         return _MODE_TO_PRESET.get(zone.mode)
 

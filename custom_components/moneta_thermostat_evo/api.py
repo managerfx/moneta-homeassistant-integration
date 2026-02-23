@@ -23,11 +23,6 @@ from .const import (
     SETPOINT_ABSENT,
     SETPOINT_EFFECTIVE,
     SETPOINT_PRESENT,
-    ZONE_MODE_AUTO,
-    ZONE_MODE_HOLIDAY,
-    ZONE_MODE_MANUAL,
-    ZONE_MODE_OFF,
-    ZONE_MODE_PARTY,
     REQUEST_TYPE_FULL,
     REQUEST_TYPE_SETPOINT,
 )
@@ -209,7 +204,7 @@ class MonetaApiClient:
         if not self._cached_data:
             return False
         zones_payload = [
-            {"id": zone.id, "mode": ZONE_MODE_AUTO, "expiration": 0}
+            {"id": zone.id, "mode": ZoneMode.AUTO, "expiration": 0}
             for zone in self._cached_data.zones
         ]
         payload = {
@@ -266,7 +261,7 @@ class MonetaApiClient:
             present_temp = self.get_setpoint_temperature(zone, SETPOINT_PRESENT) or 21.0
             zones_payload.append({
                 "id": zone.id,
-                "mode": ZONE_MODE_PARTY,
+                "mode": ZoneMode.PARTY,
                 "currentManualTemperature": present_temp,
                 "setpoints": [{"type": SETPOINT_EFFECTIVE, "temperature": present_temp}],
             })
@@ -291,7 +286,7 @@ class MonetaApiClient:
             frost_temp = self.get_setpoint_temperature(zone, SETPOINT_ABSENT) or 7.0
             zones_payload.append({
                 "id": zone.id,
-                "mode": ZONE_MODE_OFF,
+                "mode": ZoneMode.OFF,
                 "expiration": 0,
                 "setpoints": [{"type": SETPOINT_EFFECTIVE, "temperature": frost_temp}],
             })
