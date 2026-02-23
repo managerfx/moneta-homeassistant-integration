@@ -1,0 +1,17 @@
+{
+    "entity": {
+        "climate": {
+            "thermostat_zone": {
+                "state_attributes": {
+                    "preset_mode": {
+                        "state": {
+                            "home": "mdi:clock-outline",
+                            "boost": "mdi:fire",
+                            "away": "mdi:airplane"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -21,7 +21,6 @@ Home Assistant custom integration for the **Delta Control / Moneta** district-he
 - ⛅ **Season-aware**: zone 2 is only active in winter; entities become `unavailable` in summer automatically
 - 🔑 **Token update**: update Bearer token from HA UI without reinstalling
 - 📅 **Schedule service**: set weekly programming bands via `moneta_thermostat_evo.set_zone_schedule`
-- 🗓 **Schedule card**: Lovelace custom card to visually edit the weekly schedule
 - 🔁 **Polling interval**: configurable (min 5 minutes)
 
 ---
@@ -131,41 +130,6 @@ data:
           start: {hour: 9, min: 0}
           end: {hour: 23, min: 0}
 ```
-
----
-
-## Schedule Card (Lovelace)
-
-The integration ships a custom Lovelace card that lets you **visually view and edit the weekly heating schedule** directly from the HA dashboard.
-
-### Installation
-
-1. Copy `www/moneta-schedule-card.js` to `<ha-config>/www/moneta-schedule-card.js`
-2. In HA go to **Settings → Dashboards → Resources** → **Add resource**
-3. Set URL: `/local/moneta-schedule-card.js`, type: **JavaScript module**
-4. Reload the page
-
-### Card YAML
-
-```yaml
-type: custom:moneta-schedule-card
-entity: climate.nome_zona      # entità climate della zona
-zone_id: "1"                   # ID zona (default "1")
-title: "Pianificazione"        # titolo opzionale
-show_current_time: true        # mostra linea ora corrente (default true)
-```
-
-### Features
-
-| Feature | Descrizione |
-|---|---|
-| 📊 Barre visive | Visualizzazione per fascia oraria (arancio = In casa, azzurro = Fuori casa) |
-| ✎ Editing inline | Click su un giorno → apre pannello di modifica |
-| ➕ Aggiungi fasce | Pulsante per aggiungere nuove fasce orarie |
-| ⏱ Snap 30 min | Gli orari vengono arrotondati automaticamente a 30 min |
-| ✅ Toast conferma | Notifica visiva dopo il salvataggio |
-| 🕐 Ora corrente | Linea gialla che indica l'orario attuale sul giorno di oggi |
-| 📱 Mobile-friendly | Layout responsive per schermi piccoli |
 
 ---
 
