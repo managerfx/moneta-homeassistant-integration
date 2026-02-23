@@ -86,7 +86,7 @@ class MonetaApiClient:
                     return None
                 data: list[dict] = await resp.json(content_type=None)
                 _LOGGER.debug("Thermostat API RESPONSE: %s", data)
-                if not data or (isinstance(data, list) and data[0].get("error")):
+                if data is None or (isinstance(data, list) and len(data) > 0 and data[0].get("error")):
                     _LOGGER.error("API error: %s", data)
                     return None
                 return data
