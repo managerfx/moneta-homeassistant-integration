@@ -311,26 +311,59 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         await self.coordinator.async_request_refresh()
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
-        """Set manual temperature (only in HEAT/COOL mode)."""
+        """Set temperature.
+        
+        In AUTO mode:
+          - If at_home=false (idle/away): adjusts the 'absent' setpoint
+          - If at_home=true: adjusts the 'present' setpoint
+        In HEAT/COOL mode: sets manual temperature directly.
+        """
         zone = self._zone
         if not zone:
-            return
-        if self.hvac_mode == HVACMode.AUTO:
-            _LOGGER.warning(
-                "Zone %s: set temperature ignored in AUTO mode. "
-                "Use Pianificazione schedule or switch to HEAT/COOL mode.",
-                self._zone_id,
-            )
             return
         temperature = kwargs.get(ATTR_TEMPERATURE)
         if temperature is None:
             return
+        
+        client = self.coordinator.client
         data = self.coordinator.data
-        if data:
-            limits = data.limits
-            in_range = limits.present_min_temp <= temperature <= limits.present_max_temp
-            temperature = temperature if in_range else limits.present_min_temp
-        await self.coordinator.client.set_manual_temperature(self._zone_id, temperature)
+        
+        if self.hvac_mode == HVACMode.AUTO:
+            # In AUTO mode, adjust absent or present setpoint based on at_home status
+            if zone.at_home:
+                # User is home → adjust present setpoint
+                if data:
+                    limits = data.limits
+                    if not (limits.present_min_temp <= temperature <= limits.present_max_temp):
+                        temperature = max(limits.present_min_temp, min(temperature, limits.present_max_temp))
+                await client.set_present_absent_temperature(
+                    self._zone_id, present_temperature=temperature
+                )
+                _LOGGER.info(
+                    "Zone %s: present setpoint set to %.1f°C",
+                    self._zone_id, temperature
+                )
+            else:
+                # User is away (idle) → adjust absent setpoint
+                if data:
+                    limits = data.limits
+                    if not (limits.absent_min_temp <= temperature <= limits.absent_max_temp):
+                        temperature = max(limits.absent_min_temp, min(temperature, limits.absent_max_temp))
+                await client.set_present_absent_temperature(
+                    self._zone_id, absent_temperature=temperature
+                )
+                _LOGGER.info(
+                    "Zone %s: absent setpoint set to %.1f°C",
+                    self._zone_id, temperature
+                )
+        else:
+            # HEAT/COOL mode → manual temperature
+            if data:
+                limits = data.limits
+                if not (limits.present_min_temp <= temperature <= limits.present_max_temp):
+                    temperature = max(limits.present_min_temp, min(temperature, limits.present_max_temp))
+            await client.set_manual_temperature(self._zone_id, temperature)
+        
         await self.coordinator.async_request_refresh()
 
     # ------------------------------------------------------------------
