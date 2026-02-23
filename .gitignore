@@ -3,3 +3,5 @@ token.ini
 test_api.py
 DEV_NOTES.md
 test_api2.py
+__pycache__/
+*.pyc
