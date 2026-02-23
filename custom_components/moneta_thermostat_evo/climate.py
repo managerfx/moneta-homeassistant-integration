@@ -250,9 +250,22 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         schedule → set_auto()   (follow schedule)
         boost    → set_party()  (party mode for 2 hours)
         away     → set_holiday() (vacation mode for 30 days)
+        
+        Note: When switching from holiday to party, we must first
+        deactivate holiday mode by calling set_auto().
         """
         _LOGGER.info("Setting preset mode to: %s for zone %s", preset_mode, self._zone_id)
         client = self.coordinator.client
+        zone = self._zone
+        
+        # If currently in holiday mode and switching to party, first deactivate holiday
+        if zone and zone.holiday_active and preset_mode == PRESET_BOOST:
+            _LOGGER.info("Deactivating holiday mode before setting party mode")
+            await client.set_auto()
+            # Small delay to let the API process
+            import asyncio
+            await asyncio.sleep(0.5)
+        
         success = False
         if preset_mode == PRESET_SCHEDULE:
             success = await client.set_auto()
