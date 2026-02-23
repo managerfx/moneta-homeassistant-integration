@@ -41,8 +41,8 @@
                     "preset_mode": {
                         "state": {
                             "schedule": "Pianificazione",
-                            "party": "Party (2 ore)",
-                            "holiday": "Vacanza (30 giorni)"
+                            "boost": "Party (2 ore)",
+                            "away": "Vacanza (30 giorni)"
                         }
                     }
                 }

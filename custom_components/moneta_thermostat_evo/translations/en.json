@@ -41,8 +41,8 @@
                     "preset_mode": {
                         "state": {
                             "schedule": "Schedule",
-                            "party": "Party (2 hours)",
-                            "holiday": "Holiday (30 days)"
+                            "boost": "Party (2 hours)",
+                            "away": "Holiday (30 days)"
                         }
                     }
                 }

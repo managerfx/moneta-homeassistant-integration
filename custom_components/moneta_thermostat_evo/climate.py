@@ -23,6 +23,10 @@ from homeassistant.components.climate import (
     HVACAction,
     HVACMode,
 )
+from homeassistant.components.climate.const import (
+    PRESET_AWAY,
+    PRESET_BOOST,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
@@ -48,20 +52,21 @@ from .models import Zone, ZoneMode
 _LOGGER = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Preset constants — custom string values with MDI icons
+# Preset constants — use HA standard values for icons
+# PRESET_BOOST and PRESET_AWAY are imported from HA for standard icons
 # Label translations are provided via strings.json / translations/*.json
 # ---------------------------------------------------------------------------
 PRESET_SCHEDULE = "schedule"  # mode=auto  — follows weekly schedule
-PRESET_PARTY = "party"        # mode=party — party mode (1-9 hours comfort)
-PRESET_HOLIDAY = "holiday"    # mode=holiday — vacation mode (30 days antifreeze)
+# PRESET_BOOST = "boost"      # imported - mode=party (Party mode)
+# PRESET_AWAY = "away"        # imported - mode=holiday (Holiday mode)
 
-ALL_PRESETS = [PRESET_SCHEDULE, PRESET_PARTY, PRESET_HOLIDAY]
+ALL_PRESETS = [PRESET_SCHEDULE, PRESET_BOOST, PRESET_AWAY]
 
 # Maps zone.mode → preset value
 _MODE_TO_PRESET: dict[str, str | None] = {
     ZoneMode.AUTO: PRESET_SCHEDULE,
-    ZoneMode.PARTY: PRESET_PARTY,
-    ZoneMode.HOLIDAY: PRESET_HOLIDAY,
+    ZoneMode.PARTY: PRESET_BOOST,
+    ZoneMode.HOLIDAY: PRESET_AWAY,
     ZoneMode.OFF: None,
     ZoneMode.MANUAL: None,
 }
@@ -226,9 +231,9 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
 
         zone.mode     → preset value
         auto          → 'schedule'
-        party         → 'boost'
-        holiday       → 'holiday'
-        off + holidayActive → 'holiday' (vacation shows as mode=off internally)
+        party         → 'boost' (Party mode - uses HA standard for icon)
+        holiday       → 'away' (Holiday mode - uses HA standard for icon)
+        off + holidayActive → 'away' (vacation shows as mode=off internally)
         off / manual  → None
         """
         zone = self._zone
@@ -236,24 +241,24 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
             return None
         # Holiday mode shows as mode=off with holidayActive=true
         if zone.holiday_active:
-            return PRESET_HOLIDAY
+            return PRESET_AWAY
         return _MODE_TO_PRESET.get(zone.mode)
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set preset mode.
 
         schedule → set_auto()   (follow schedule)
-        party    → set_party()  (party mode for 2 hours)
-        holiday  → set_holiday() (vacation mode for 30 days)
+        boost    → set_party()  (party mode for 2 hours)
+        away     → set_holiday() (vacation mode for 30 days)
         """
         _LOGGER.info("Setting preset mode to: %s for zone %s", preset_mode, self._zone_id)
         client = self.coordinator.client
         success = False
         if preset_mode == PRESET_SCHEDULE:
             success = await client.set_auto()
-        elif preset_mode == PRESET_PARTY:
-            success = await client.set_party(self._zone_id)
-        elif preset_mode == PRESET_HOLIDAY:
+        elif preset_mode == PRESET_BOOST:
+            success = await client.set_party()  # Apply to all zones
+        elif preset_mode == PRESET_AWAY:
             success = await client.set_holiday()
         _LOGGER.info("Preset mode %s result: %s", preset_mode, success)
         await self.coordinator.async_request_refresh()
