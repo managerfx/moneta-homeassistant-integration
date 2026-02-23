@@ -99,10 +99,21 @@ class MonetaApiClient:
 
         Mirrors the pattern in thermostatApi() for non-Full request types.
         """
+        _LOGGER.info("API SET request: %s", payload)
         result = await self._api_post(payload)
         if result is not None:
+            # Check if API returned success
+            if isinstance(result, list) and len(result) > 0:
+                first_result = result[0]
+                success = first_result.get("success", False)
+                error = first_result.get("error", "")
+                _LOGGER.info("API SET response - success: %s, error: %s", success, error)
+                if not success and error:
+                    _LOGGER.error("API SET failed: %s", error)
+                    return False
             self._invalidate_cache()
             return True
+        _LOGGER.error("API SET request returned None")
         return False
 
     # ------------------------------------------------------------------
@@ -258,12 +269,20 @@ class MonetaApiClient:
         minutes_remaining = (timestamp - now) / 60, and accepts 60-540 minutes.
         """
         if not self._cached_data:
+            _LOGGER.error("set_party: No cached data available")
             return False
         
         # Clamp hours to valid range (1-9 hours = 60-540 minutes)
         hours = max(1, min(hours, 9))
         # Calculate expiration as Unix timestamp
-        expiration_ts = int(time.time()) + (hours * 3600)
+        now_ts = int(time.time())
+        expiration_ts = now_ts + (hours * 3600)
+        minutes_from_now = (expiration_ts - now_ts) // 60
+        
+        _LOGGER.info(
+            "set_party: hours=%d, now_ts=%d, expiration_ts=%d, minutes_from_now=%d",
+            hours, now_ts, expiration_ts, minutes_from_now
+        )
         
         zones = (
             [z for z in self._cached_data.zones if z.id == zone_id]

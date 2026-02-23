@@ -26,6 +26,7 @@ from homeassistant.components.climate import (
 from homeassistant.components.climate.const import (
     PRESET_AWAY,
     PRESET_BOOST,
+    PRESET_HOME,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
@@ -53,18 +54,18 @@ _LOGGER = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Preset constants — use HA standard values for icons
-# PRESET_BOOST and PRESET_AWAY are imported from HA for standard icons
+# PRESET_HOME, PRESET_BOOST, PRESET_AWAY are imported from HA for standard icons
 # Label translations are provided via strings.json / translations/*.json
 # ---------------------------------------------------------------------------
-PRESET_SCHEDULE = "schedule"  # mode=auto  — follows weekly schedule
+# PRESET_HOME = "home"        # imported - mode=auto (Schedule/Pianificazione)
 # PRESET_BOOST = "boost"      # imported - mode=party (Party mode)
 # PRESET_AWAY = "away"        # imported - mode=holiday (Holiday mode)
 
-ALL_PRESETS = [PRESET_SCHEDULE, PRESET_BOOST, PRESET_AWAY]
+ALL_PRESETS = [PRESET_HOME, PRESET_BOOST, PRESET_AWAY]
 
 # Maps zone.mode → preset value
 _MODE_TO_PRESET: dict[str, str | None] = {
-    ZoneMode.AUTO: PRESET_SCHEDULE,
+    ZoneMode.AUTO: PRESET_HOME,
     ZoneMode.PARTY: PRESET_BOOST,
     ZoneMode.HOLIDAY: PRESET_AWAY,
     ZoneMode.OFF: None,
@@ -267,7 +268,7 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
             await asyncio.sleep(0.5)
         
         success = False
-        if preset_mode == PRESET_SCHEDULE:
+        if preset_mode == PRESET_HOME:
             success = await client.set_auto()
         elif preset_mode == PRESET_BOOST:
             success = await client.set_party()  # Apply to all zones

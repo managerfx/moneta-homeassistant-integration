@@ -40,7 +40,7 @@
                 "state_attributes": {
                     "preset_mode": {
                         "state": {
-                            "schedule": "Pianificazione",
+                            "home": "Pianificazione",
                             "boost": "Party (2 ore)",
                             "away": "Vacanza (30 giorni)"
                         }
