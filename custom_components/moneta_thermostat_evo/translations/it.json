@@ -41,8 +41,8 @@
                     "preset_mode": {
                         "state": {
                             "schedule": "🗓️ Pianificazione",
-                            "away": "🚶 Fuori casa",
-                            "boost": "🔥 Boost"
+                            "boost": "🔥 Boost",
+                            "holiday": "🏖️ Vacanza (30 giorni)"
                         }
                     }
                 }

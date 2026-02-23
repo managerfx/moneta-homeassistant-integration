@@ -24,7 +24,6 @@ from homeassistant.components.climate import (
     HVACMode,
 )
 from homeassistant.components.climate.const import (
-    PRESET_AWAY,
     PRESET_BOOST,
 )
 from homeassistant.config_entries import ConfigEntry
@@ -57,16 +56,17 @@ _LOGGER = logging.getLogger(__name__)
 # Label translations (Italian) are provided via strings.json / translations/en.json
 # ---------------------------------------------------------------------------
 PRESET_SCHEDULE = "schedule"  # mode=auto  — follows weekly schedule (custom, no std icon)
+PRESET_HOLIDAY = "holiday"    # mode=holiday — vacation mode (30 days antifreeze)
 # PRESET_AWAY = "away"        # imported from homeassistant.components.climate.const
 # PRESET_BOOST = "boost"      # imported from homeassistant.components.climate.const
 
-ALL_PRESETS = [PRESET_SCHEDULE, PRESET_AWAY, PRESET_BOOST]
+ALL_PRESETS = [PRESET_SCHEDULE, PRESET_BOOST, PRESET_HOLIDAY]
 
 # Maps zone.mode → preset value
 _MODE_TO_PRESET: dict[str, str | None] = {
     ZoneMode.AUTO: PRESET_SCHEDULE,
     ZoneMode.PARTY: PRESET_BOOST,
-    ZoneMode.HOLIDAY: PRESET_AWAY,
+    ZoneMode.HOLIDAY: PRESET_HOLIDAY,
     ZoneMode.OFF: None,
     ZoneMode.MANUAL: None,
 }
@@ -232,31 +232,32 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         zone.mode     → preset value
         auto          → 'schedule'
         party         → 'boost'
-        holiday       → 'away'
+        holiday       → 'holiday'
+        off + holidayActive → 'holiday' (vacation shows as mode=off internally)
         off / manual  → None
         """
         zone = self._zone
         if not zone:
             return None
-        # atHome=false + mode=auto → away
-        if zone.mode == ZoneMode.AUTO and not zone.at_home:
-            return PRESET_AWAY
+        # Holiday mode shows as mode=off with holidayActive=true
+        if zone.holiday_active:
+            return PRESET_HOLIDAY
         return _MODE_TO_PRESET.get(zone.mode)
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set preset mode.
 
         schedule → set_auto()   (follow schedule)
-        away     → set_auto()   (physical atHome button controls actual state)
-        boost    → set_party()
+        boost    → set_party()  (party mode for 2 hours)
+        holiday  → set_holiday() (vacation mode for 30 days)
         """
         client = self.coordinator.client
         if preset_mode == PRESET_SCHEDULE:
             await client.set_auto()
-        elif preset_mode == PRESET_AWAY:
-            await client.set_auto()
         elif preset_mode == PRESET_BOOST:
             await client.set_party(self._zone_id)
+        elif preset_mode == PRESET_HOLIDAY:
+            await client.set_holiday()
         await self.coordinator.async_request_refresh()
 
     # ------------------------------------------------------------------
