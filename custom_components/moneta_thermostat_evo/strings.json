@@ -40,9 +40,9 @@
                 "state_attributes": {
                     "preset_mode": {
                         "state": {
-                            "schedule": "Pianificazione",
-                            "away": "Fuori casa",
-                            "boost": "Boost"
+                            "schedule": "🗓️ Pianificazione",
+                            "away": "🚶 Fuori casa",
+                            "boost": "🔥 Boost"
                         }
                     }
                 }
