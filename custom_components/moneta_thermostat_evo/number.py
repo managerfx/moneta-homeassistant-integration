@@ -37,19 +37,38 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Moneta number entities from a config entry."""
-    coordinator: MonetaThermostatCoordinator = hass.data[DOMAIN][entry.entry_id]
     data = coordinator.data
     if not data:
         return
 
+    limits = data.limits
     entities: list[NumberEntity] = []
-    for zone in data.zones:
+
+    # Handle Present Setpoint
+    if limits.present_is_unique:
         entities.append(
-            MonetaSetpointNumber(coordinator, entry.entry_id, zone.id, SETPOINT_PRESENT)
+            MonetaSetpointNumber(
+                coordinator, entry.entry_id, "1", SETPOINT_PRESENT, is_global=True
+            )
         )
+    else:
+        for zone in data.zones:
+            entities.append(
+                MonetaSetpointNumber(coordinator, entry.entry_id, zone.id, SETPOINT_PRESENT)
+            )
+
+    # Handle Absent Setpoint
+    if limits.absent_is_unique:
         entities.append(
-            MonetaSetpointNumber(coordinator, entry.entry_id, zone.id, SETPOINT_ABSENT)
+            MonetaSetpointNumber(
+                coordinator, entry.entry_id, "1", SETPOINT_ABSENT, is_global=True
+            )
         )
+    else:
+        for zone in data.zones:
+            entities.append(
+                MonetaSetpointNumber(coordinator, entry.entry_id, zone.id, SETPOINT_ABSENT)
+            )
 
     async_add_entities(entities)
 
@@ -78,14 +97,21 @@ class MonetaSetpointNumber(
         entry_id: str,
         zone_id: str,
         setpoint_type: str,  # "present" or "absent"
+        is_global: bool = False,
     ) -> None:
         super().__init__(coordinator)
         self._entry_id = entry_id
         self._zone_id = zone_id
         self._setpoint_type = setpoint_type
+        self._is_global = is_global
+
         label = "Present" if setpoint_type == SETPOINT_PRESENT else "Absent"
-        self._attr_unique_id = f"{entry_id}_zone_{zone_id}_{setpoint_type}_setpoint"
-        self._attr_name = f"Zone {zone_id} {label} Temperature"
+        if is_global:
+            self._attr_unique_id = f"{entry_id}_global_{setpoint_type}_setpoint"
+            self._attr_name = f"{label} Temperature"
+        else:
+            self._attr_unique_id = f"{entry_id}_zone_{zone_id}_{setpoint_type}_setpoint"
+            self._attr_name = f"Zone {zone_id} {label} Temperature"
 
     @property
     def _zone(self) -> Zone | None:
