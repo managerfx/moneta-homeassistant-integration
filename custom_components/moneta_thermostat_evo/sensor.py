@@ -27,7 +27,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, MANUFACTURER, MODEL
 from .coordinator import MonetaThermostatCoordinator
-from .models import Zone
+from .models import Band, Zone
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -250,7 +250,7 @@ class MonetaFirstZoneScheduleSensor(
         """Format time as HH:MM."""
         return f"{hour:02d}:{minute:02d}"
 
-    def _format_band(self, band) -> str:
+    def _format_band(self, band: Band) -> str:
         """Format a single band as start-end."""
         start = self._format_time(band.start_hour, band.start_min)
         end = self._format_time(band.end_hour, band.end_min)
