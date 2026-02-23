@@ -15,7 +15,7 @@ Home Assistant custom integration for the **Delta Control / Moneta** district-he
 |---|---|
 | `climate` | Mode (off / heat / cool / auto) + target temperature |
 | `number` | Present temperature, Absent temperature (per zone) |
-| `sensor` | External temperature, per-zone temperature |
+| `sensor` | External temperature, per-zone temperature, schedule status |
 | `binary_sensor` | Occupancy (atHome), Holiday mode |
 
 - ⛅ **Season-aware**: zone 2 is only active in winter; entities become `unavailable` in summer automatically
@@ -75,6 +75,8 @@ Both are settable at any time, independently of the current mode.
 
 - **External Temperature** — outdoor sensor from the thermostat
 - **Zone X Temperature** — indoor temperature per zone (unavailable for zones missing in the current season)
+- **Active Scheduling** — indicates if there are active schedulations (`active`, `inactive`, or `unknown`)
+- **First Zone Schedule** — displays the first zone's weekly schedule in human-readable format (e.g., `MON 08:30-09:30, 12:30-20:30; TUE 08:30-09:30`)
 
 ### Binary Sensor
 
