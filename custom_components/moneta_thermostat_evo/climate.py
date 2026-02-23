@@ -58,10 +58,11 @@ _LOGGER = logging.getLogger(__name__)
 # Label translations are provided via strings.json / translations/*.json
 # ---------------------------------------------------------------------------
 # PRESET_HOME = "home"        # imported - mode=auto (Schedule/Pianificazione)
-# PRESET_BOOST = "boost"      # imported - mode=party (Party mode)
-# PRESET_AWAY = "away"        # imported - mode=holiday (Holiday mode)
+# PRESET_BOOST = "boost"      # DISABLED - Party mode broken in backend
+# PRESET_AWAY = "away"        # DISABLED - Holiday mode broken in backend
 
-ALL_PRESETS = [PRESET_HOME, PRESET_BOOST, PRESET_AWAY]
+# Only Schedule preset is available - Party and Holiday disabled due to backend API issues
+ALL_PRESETS = [PRESET_HOME]
 
 # Maps zone.mode → preset value
 _MODE_TO_PRESET: dict[str, str | None] = {
