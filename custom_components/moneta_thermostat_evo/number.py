@@ -37,6 +37,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Moneta number entities from a config entry."""
+    coordinator: MonetaThermostatCoordinator = hass.data[DOMAIN][entry.entry_id]
     data = coordinator.data
     if not data:
         return

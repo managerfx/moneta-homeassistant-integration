@@ -180,7 +180,7 @@ class MonetaApiClient:
             effective_temp = zone.temperature + 1
             zones_payload.append({
                 "id": zone.id,
-                "mode": ZONE_MODE_OFF,
+                "mode": ZoneMode.OFF,
                 "expiration": 0,
                 "setpoints": [
                     {"type": SETPOINT_EFFECTIVE, "temperature": effective_temp}
@@ -228,7 +228,7 @@ class MonetaApiClient:
             zones_payload.append(
                 {
                     "id": zone.id,
-                    "mode": ZONE_MODE_MANUAL,
+                    "mode": ZoneMode.MANUAL,
                     "currentManualTemperature": present_temp,
                     "setpoints": [
                         {"type": SETPOINT_EFFECTIVE, "temperature": present_temp}
@@ -313,7 +313,7 @@ class MonetaApiClient:
                 {
                     "id": zone_id,
                     "currentManualTemperature": temperature,
-                    "mode": ZONE_MODE_MANUAL,
+                    "mode": ZoneMode.MANUAL,
                 }
             ],
         }
