@@ -1,7 +1,7 @@
 # Moneta Thermostat — Home Assistant Integration (EVO)
 
 [![HACS Custom Repository](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-[![GitHub Release](https://img.shields.io/github/v/release/managerfx/moneta-homeassistant-integration-evo)](https://github.com/managerfx/moneta-homeassistant-integration-evo/releases)
+[![GitHub Release](https://img.shields.io/github/v/release/managerfx/moneta-homeassistant-integration)](https://github.com/managerfx/moneta-homeassistant-integration/releases)
 
 Home Assistant custom integration for the **Delta Control / Moneta** district-heating thermostat, powered by the [PlanetSmartCity](https://portal.planetsmartcity.com) cloud backend.
 
@@ -44,7 +44,7 @@ The token has a long expiry (months). You can update it anytime from **Settings 
 ## Installation via HACS
 
 1. In HA, go to **HACS → Integrations → ⋮ → Custom repositories**
-2. Add `https://github.com/managerfx/moneta-homeassistant-integration-evo` as **Integration**
+2. Add `https://github.com/managerfx/moneta-homeassistant-integration` as **Integration**
 3. Search for **Moneta Thermostat** and install
 4. Restart Home Assistant
 5. Go to **Settings → Integrations → + Add Integration → Moneta Thermostat**
