@@ -30,6 +30,9 @@ from .models import Zone
 
 _LOGGER = logging.getLogger(__name__)
 
+# Constant for "absent" type used only internally for propagation check
+_TYPE_ABSENT = SETPOINT_ABSENT
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -117,6 +120,9 @@ class MonetaSetpointNumber(
         # Optimistic state – cleared when coordinator delivers real data
         self._optimistic_value: float | None = None
 
+        # Register in coordinator for cross-zone optimistic propagation
+        coordinator.number_entities.append(self)
+
     @property
     def _zone(self) -> Zone | None:
         data = self.coordinator.data
@@ -132,6 +138,18 @@ class MonetaSetpointNumber(
         """Clear optimistic state when fresh backend data arrives."""
         self._optimistic_value = None
         super()._handle_coordinator_update()
+
+    def _propagate_optimistic_absent(self, value: float) -> None:
+        """Push optimistic absent setpoint to ALL sibling absent number entities.
+
+        The Moneta backend applies absent temperature globally across zones,
+        so changing it on one zone should reflect immediately on all of them.
+        Present temperature is per-zone and is NOT propagated.
+        """
+        for entity in self.coordinator.number_entities:
+            if entity._setpoint_type == _TYPE_ABSENT:
+                entity._optimistic_value = value
+                entity.async_write_ha_state()
 
     @property
     def available(self) -> bool:
@@ -185,9 +203,13 @@ class MonetaSetpointNumber(
 
     async def async_set_native_value(self, value: float) -> None:
         """Set the setpoint temperature via API (optimistic)."""
-        # Optimistic: update UI immediately
-        self._optimistic_value = value
-        self.async_write_ha_state()
+        if self._setpoint_type == SETPOINT_PRESENT:
+            # Present is per-zone: optimistic only on this entity
+            self._optimistic_value = value
+            self.async_write_ha_state()
+        else:
+            # Absent is global: propagate optimistic to ALL absent entities
+            self._propagate_optimistic_absent(value)
 
         client = self.coordinator.client
         if self._setpoint_type == SETPOINT_PRESENT:

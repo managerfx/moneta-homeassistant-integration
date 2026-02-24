@@ -154,6 +154,9 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         self._optimistic_target_temp: float | None = None
         self._optimistic_preset_mode: str | None = _SENTINEL_PRESET
 
+        # Register in coordinator for cross-zone optimistic propagation
+        coordinator.climate_entities.append(self)
+
     # ------------------------------------------------------------------
     # Optimistic helpers
     # ------------------------------------------------------------------
@@ -168,6 +171,23 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         """Clear optimistic state when fresh backend data arrives."""
         self._clear_optimistic()
         super()._handle_coordinator_update()
+
+    def _propagate_optimistic_mode(
+        self, hvac_mode: HVACMode, preset: str | None
+    ) -> None:
+        """Push optimistic HVAC mode + preset to ALL sibling climate zones.
+
+        Mode and preset are global on the Moneta backend – changing one zone
+        changes them all – so we reflect this immediately in the UI.
+        """
+        for entity in self.coordinator.climate_entities:
+            entity._optimistic_hvac_mode = hvac_mode
+            if hvac_mode == HVACMode.AUTO:
+                entity._optimistic_preset_mode = preset
+            else:
+                entity._optimistic_preset_mode = None
+            # Do NOT touch _optimistic_target_temp – it is per-zone
+            entity.async_write_ha_state()
 
     # ------------------------------------------------------------------
     # Device info
@@ -285,10 +305,8 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         """
         _LOGGER.info("Setting preset mode to: %s for zone %s", preset_mode, self._zone_id)
 
-        # Optimistic: update UI immediately
-        self._optimistic_preset_mode = preset_mode
-        self._optimistic_hvac_mode = HVACMode.AUTO
-        self.async_write_ha_state()
+        # Optimistic: update ALL zones immediately (preset is global)
+        self._propagate_optimistic_mode(HVACMode.AUTO, preset_mode)
 
         client = self.coordinator.client
         zone = self._zone
@@ -354,14 +372,10 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
     # ------------------------------------------------------------------
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
-        """Set HVAC mode (optimistic)."""
-        # Optimistic: update UI immediately
-        self._optimistic_hvac_mode = hvac_mode
-        if hvac_mode == HVACMode.AUTO:
-            self._optimistic_preset_mode = PRESET_HOME
-        else:
-            self._optimistic_preset_mode = None
-        self.async_write_ha_state()
+        """Set HVAC mode (optimistic, propagated to all zones)."""
+        # Optimistic: update ALL zones immediately (mode is global)
+        preset = PRESET_HOME if hvac_mode == HVACMode.AUTO else None
+        self._propagate_optimistic_mode(hvac_mode, preset)
 
         client = self.coordinator.client
         if hvac_mode == HVACMode.OFF:
@@ -397,7 +411,7 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         if self.hvac_mode == HVACMode.AUTO:
             # In AUTO mode, adjust absent or present setpoint based on at_home status
             if zone.at_home:
-                # User is home → adjust present setpoint
+                # User is home → adjust present setpoint (per-zone only)
                 if data:
                     limits = data.limits
                     if not (limits.present_min_temp <= temperature <= limits.present_max_temp):
@@ -410,11 +424,16 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
                     self._zone_id, temperature
                 )
             else:
-                # User is away (idle) → adjust absent setpoint
+                # User is away (idle) → adjust absent setpoint (global!)
                 if data:
                     limits = data.limits
                     if not (limits.absent_min_temp <= temperature <= limits.absent_max_temp):
                         temperature = max(limits.absent_min_temp, min(temperature, limits.absent_max_temp))
+                # Propagate absent optimistic to all number entities
+                for num_entity in self.coordinator.number_entities:
+                    if num_entity._setpoint_type == SETPOINT_ABSENT:
+                        num_entity._optimistic_value = temperature
+                        num_entity.async_write_ha_state()
                 await client.set_present_absent_temperature(
                     self._zone_id, absent_temperature=temperature
                 )
