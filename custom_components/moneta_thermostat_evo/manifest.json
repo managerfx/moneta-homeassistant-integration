@@ -1,7 +1,7 @@
 {
     "domain": "moneta_thermostat_evo",
     "name": "Moneta Thermostat EVO",
-    "version": "2.2.1",
+    "version": "2.2.2",
     "documentation": "https://github.com/managerfx/moneta-homeassistant-integration-evo",
     "issue_tracker": "https://github.com/managerfx/moneta-homeassistant-integration-evo/issues",
     "codeowners": [

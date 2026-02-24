@@ -76,7 +76,10 @@ Both are settable at any time, independently of the current mode.
 - **External Temperature** — outdoor sensor from the thermostat
 - **Zone X Temperature** — indoor temperature per zone (unavailable for zones missing in the current season)
 - **Active Scheduling** — indicates if there are active schedules (`active`, `inactive`, or `unknown`)
-- **First Zone Schedule** — displays the first zone's weekly schedule in human-readable format (e.g., `MON 08:30-09:30, 12:30-20:30; TUE 08:30-09:30`)
+- **Schedule** — displays the first zone's weekly schedule in human-readable format. Contiguous days sharing the same bands are grouped; days with no active bands are omitted. Groups are separated by ` | ` and multiple bands within a day by `, `.
+  - All days same → `MON-SUN 05:00-08:00, 13:30-20:30`
+  - Two groups → `MON-FRI 07:00-22:30 | SAT-SUN 09:00-23:00`
+  - Non-contiguous days → `MON 07:00-22:30 | WED 07:00-22:30 | FRI 07:00-22:30 | SAT-SUN 09:00-23:00`
 
 ### Binary Sensor
 
@@ -132,6 +135,12 @@ data:
           start: {hour: 9, min: 0}
           end: {hour: 23, min: 0}
 ```
+
+With this configuration the **Schedule** sensor would display:
+```
+MON 07:00-22:30 | WED 07:00-22:30 | FRI 07:00-22:30 | SAT-SUN 09:00-23:00
+```
+(TUE and THU have no active bands and are omitted; SAT and SUN share the same bands and are grouped)
 
 ---
 
