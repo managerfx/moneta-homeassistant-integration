@@ -85,8 +85,13 @@ Both are settable at any time, independently of the current mode.
 
 - **Thermostat Presence** (`occupancy`) — reflects `atHome` flag (set by physical thermostat button only, read-only from API)
 - **Holiday Mode** — reflects `holidayActive` flag (set by physical thermostat button only, read-only from API)
+- **Party Mode** — exposes `mode=party` (Boost) with expiration metadata; updates automatically when the backend reports a comfort override
 
 > ⚠️ **Note**: `atHome` and `holidayActive` can only be changed via the physical thermostat panel. The API ignores attempts to set these fields remotely.
+
+### Button
+
+- **Refresh State** — forces an immediate API poll by invalidating the cached client state and asking the coordinator for an update, useful when you want to confirm the latest thermostat response without waiting for the next interval.
 
 ---
 
@@ -140,7 +145,16 @@ With this configuration the **Schedule** sensor would display:
 ```
 MON 07:00-22:30 | WED 07:00-22:30 | FRI 07:00-22:30 | SAT-SUN 09:00-23:00
 ```
-(TUE and THU have no active bands and are omitted; SAT and SUN share the same bands and are grouped)
+-(TUE and THU have no active bands and are omitted; SAT and SUN share the same bands and are grouped)
+
+<details>
+<summary><strong>Verifying schedule updates</strong></summary>
+
+1. Call `moneta_thermostat_evo.set_zone_schedule` from Developer Tools → Services and examine the service response (success/failure). A successful call invalidates the cached state and forces the coordinator to refresh immediately.
+2. Watch the **Schedule** sensor and per-zone `calendar` attributes to confirm the uploaded bands appear; they are rebuilt from the API response via `MonetaFirstZoneScheduleSensor::_build_schedule_value`.
+3. The API client `set_schedule_by_zone_id` already mirrors the working request structure from the original plugin (UTC step/schedule payload), so if the service completes without errors the thermostat accepts the new program.
+
+</details>
 
 ---
 

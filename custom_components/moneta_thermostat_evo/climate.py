@@ -52,6 +52,9 @@ from .models import Zone, ZoneMode
 
 _LOGGER = logging.getLogger(__name__)
 
+# Sentinel used to distinguish "no optimistic preset set" from "preset is None"
+_SENTINEL_PRESET: str | None = object()  # type: ignore[assignment]
+
 # ---------------------------------------------------------------------------
 # Preset constants — use HA standard values for icons
 # PRESET_HOME, PRESET_BOOST, PRESET_AWAY are imported from HA for standard icons
@@ -146,6 +149,26 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         self._attr_unique_id = f"{entry_id}_zone_{zone_id}"
         self._attr_name = display_name
 
+        # Optimistic state – cleared when coordinator delivers real data
+        self._optimistic_hvac_mode: HVACMode | None = None
+        self._optimistic_target_temp: float | None = None
+        self._optimistic_preset_mode: str | None = _SENTINEL_PRESET
+
+    # ------------------------------------------------------------------
+    # Optimistic helpers
+    # ------------------------------------------------------------------
+
+    def _clear_optimistic(self) -> None:
+        """Reset all optimistic overrides."""
+        self._optimistic_hvac_mode = None
+        self._optimistic_target_temp = None
+        self._optimistic_preset_mode = _SENTINEL_PRESET
+
+    def _handle_coordinator_update(self) -> None:
+        """Clear optimistic state when fresh backend data arrives."""
+        self._clear_optimistic()
+        super()._handle_coordinator_update()
+
     # ------------------------------------------------------------------
     # Device info
     # ------------------------------------------------------------------
@@ -199,6 +222,8 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
 
     @property
     def hvac_mode(self) -> HVACMode | None:
+        if self._optimistic_hvac_mode is not None:
+            return self._optimistic_hvac_mode
         zone = self._zone
         if not zone:
             return None
@@ -238,6 +263,8 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         off + holidayActive → 'away' (vacation shows as mode=off internally)
         off / manual  → None
         """
+        if self._optimistic_preset_mode is not _SENTINEL_PRESET:
+            return self._optimistic_preset_mode
         zone = self._zone
         if not zone:
             return None
@@ -257,6 +284,12 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         deactivate holiday mode by calling set_auto().
         """
         _LOGGER.info("Setting preset mode to: %s for zone %s", preset_mode, self._zone_id)
+
+        # Optimistic: update UI immediately
+        self._optimistic_preset_mode = preset_mode
+        self._optimistic_hvac_mode = HVACMode.AUTO
+        self.async_write_ha_state()
+
         client = self.coordinator.client
         zone = self._zone
         
@@ -292,6 +325,8 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         """In AUTO mode shows effective_setpoint (read-only).
         In HEAT/COOL mode shows manual setpoint.
         """
+        if self._optimistic_target_temp is not None:
+            return self._optimistic_target_temp
         zone = self._zone
         return zone.effective_setpoint if zone else None
 
@@ -319,7 +354,15 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
     # ------------------------------------------------------------------
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
-        """Set HVAC mode."""
+        """Set HVAC mode (optimistic)."""
+        # Optimistic: update UI immediately
+        self._optimistic_hvac_mode = hvac_mode
+        if hvac_mode == HVACMode.AUTO:
+            self._optimistic_preset_mode = PRESET_HOME
+        else:
+            self._optimistic_preset_mode = None
+        self.async_write_ha_state()
+
         client = self.coordinator.client
         if hvac_mode == HVACMode.OFF:
             await client.set_off()
@@ -343,7 +386,11 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         temperature = kwargs.get(ATTR_TEMPERATURE)
         if temperature is None:
             return
-        
+
+        # Optimistic: update UI immediately
+        self._optimistic_target_temp = temperature
+        self.async_write_ha_state()
+
         client = self.coordinator.client
         data = self.coordinator.data
         

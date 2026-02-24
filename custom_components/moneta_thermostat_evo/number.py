@@ -114,12 +114,24 @@ class MonetaSetpointNumber(
             self._attr_unique_id = f"{entry_id}_zone_{zone_id}_{setpoint_type}_setpoint"
             self._attr_name = f"Zone {zone_id} {label} Temperature"
 
+        # Optimistic state – cleared when coordinator delivers real data
+        self._optimistic_value: float | None = None
+
     @property
     def _zone(self) -> Zone | None:
         data = self.coordinator.data
         if not data:
             return None
         return next((z for z in data.zones if z.id == self._zone_id), None)
+
+    # ------------------------------------------------------------------
+    # Optimistic helpers
+    # ------------------------------------------------------------------
+
+    def _handle_coordinator_update(self) -> None:
+        """Clear optimistic state when fresh backend data arrives."""
+        self._optimistic_value = None
+        super()._handle_coordinator_update()
 
     @property
     def available(self) -> bool:
@@ -163,6 +175,8 @@ class MonetaSetpointNumber(
     @property
     def native_value(self) -> float | None:
         """Return the current temperature for this setpoint type."""
+        if self._optimistic_value is not None:
+            return self._optimistic_value
         zone = self._zone
         if not zone:
             return None
@@ -170,7 +184,11 @@ class MonetaSetpointNumber(
         return sp.temperature if sp else None
 
     async def async_set_native_value(self, value: float) -> None:
-        """Set the setpoint temperature via API."""
+        """Set the setpoint temperature via API (optimistic)."""
+        # Optimistic: update UI immediately
+        self._optimistic_value = value
+        self.async_write_ha_state()
+
         client = self.coordinator.client
         if self._setpoint_type == SETPOINT_PRESENT:
             await client.set_present_absent_temperature(
