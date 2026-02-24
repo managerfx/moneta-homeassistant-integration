@@ -170,7 +170,3 @@ MON 07:00-22:30 | WED 07:00-22:30 | FRI 07:00-22:30 | SAT-SUN 09:00-23:00
 | set_off / set_auto | Zone 1 only | **All zones** |
 
 ---
-
-## Credits
-
-Reverse-engineered from the [moneta-homebridge-plugin](https://github.com/managerfx/moneta-homebridge-plugin) TypeScript implementation.
