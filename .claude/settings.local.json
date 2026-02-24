@@ -6,7 +6,10 @@
       "Bash(git push:*)",
       "Bash(python3 -m pytest:*)",
       "Bash(pip3 install:*)",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(git -C /Users/felicelombardi/GIT_REPO/moneta-homeassistant-integration remote -v)",
+      "Bash(git -C /Users/felicelombardi/GIT_REPO/moneta-homeassistant-integration remote set-url origin https://github.com/managerfx/moneta-homeassistant-integration.git)",
+      "Bash(git -C /Users/felicelombardi/GIT_REPO/moneta-homeassistant-integration push --force origin main)"
     ]
   }
 }

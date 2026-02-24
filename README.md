@@ -28,11 +28,11 @@ Home Assistant custom integration for the **Delta Control / Moneta** district-he
 ## Requirements
 
 - Home Assistant 2024.1 or newer
-- A valid Bearer token from the PlanetSmartCity / MyA2A app
+- A valid Bearer token from the PlanetSmartCity
 
 ### Obtaining the Bearer token
 
-1. Open the **PlanetHome** or **MyA2A** mobile app and log in
+1. Open the **PlanetHome** mobile app and log in
 2. Intercept the network traffic (Charles Proxy, mitmproxy, or browser DevTools)
 3. Look for a request to `portal.planetsmartcity.com/api/v3/sensors_data_request`
 4. Copy the `Authorization: Bearer <token>` header value
