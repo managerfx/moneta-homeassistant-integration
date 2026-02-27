@@ -50,6 +50,9 @@ from .const import (
 from .coordinator import MonetaThermostatCoordinator
 from .models import Zone, ZoneMode
 
+# Differenziale per attivazione fiammella/raffrescamento (modificabile)
+TEMP_DIFF_TRIGGER = 0.1  # °C
+
 _LOGGER = logging.getLogger(__name__)
 
 # Sentinel used to distinguish "no optimistic preset set" from "preset is None"
@@ -262,10 +265,21 @@ class MonetaClimateEntity(CoordinatorEntity[MonetaThermostatCoordinator], Climat
         if not zone:
             return None
         category = self._category
+        # Recupera temperatura ambiente e setpoint effettivo
+        temp = zone.temperature
+        setpoint = zone.effective_setpoint
+        # Logica per riscaldamento (inverno)
         if zone.mode != ZoneMode.OFF and category == CATEGORY_HEATING and zone.at_home:
-            return HVACAction.HEATING
+            if temp is not None and setpoint is not None and (temp < setpoint - TEMP_DIFF_TRIGGER):
+                return HVACAction.HEATING
+            else:
+                return HVACAction.IDLE
+        # Logica per raffrescamento (estate)
         if zone.mode != ZoneMode.OFF and category == CATEGORY_COOLING and zone.at_home:
-            return HVACAction.COOLING
+            if temp is not None and setpoint is not None and (temp > setpoint + TEMP_DIFF_TRIGGER):
+                return HVACAction.COOLING
+            else:
+                return HVACAction.IDLE
         return HVACAction.IDLE
 
     # ------------------------------------------------------------------
