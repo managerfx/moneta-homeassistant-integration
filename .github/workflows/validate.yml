@@ -2,9 +2,8 @@ name: HACS Validation
 
 on:
   push:
-  pull_request:
-  schedule:
-    - cron: "0 0 * * *"
+    branches:
+      - main
 
 jobs:
   validate:
